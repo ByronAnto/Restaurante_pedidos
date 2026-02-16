@@ -1,0 +1,76 @@
+version: '3.8'
+
+services:
+  # ─── Base de Datos PostgreSQL ───
+  postgres:
+    image: postgres:16-alpine
+    container_name: restaurante-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: restaurante_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 500M
+        reservations:
+          memory: 128M
+
+  # ─── Backend API ───
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: restaurante-api
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: restaurante_db
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      JWT_SECRET: restaurante_jwt_secret_2026_docker
+      JWT_EXPIRES_IN: 24h
+      PORT: 3000
+      NODE_ENV: production
+      PRINT_SERVICE_URL: http://print-service:3001
+      PRINT_ENABLED: "false"
+      KITCHEN_DISPLAY_ENABLED: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 500M
+        reservations:
+          memory: 128M
+
+  # ─── Servicio de Impresión (opcional) ───
+  print-service:
+    build:
+      context: ./print-service
+      dockerfile: Dockerfile
+    container_name: restaurante-print
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      PORT: 3001
+    profiles:
+      - printing
+
+volumes:
+  postgres_data:

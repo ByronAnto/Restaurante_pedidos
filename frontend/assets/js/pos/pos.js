@@ -1,0 +1,1130 @@
+/**
+ * ═══════════════════════════════════════════════════════
+ *  POS Module - Punto de Venta
+ *  Gestión de ventas con selección de productos y pagos
+ * ═══════════════════════════════════════════════════════
+ */
+
+const POS = {
+  cart: [],
+  products: [],
+  categories: [],
+  tables: [],
+  selectedCategory: null,
+  searchTerm: '',
+  container: null, // Referencia al contenedor
+  
+  // Full Service Mode
+  mode: 'table-map', // 'table-map' | 'ordering'
+  orderType: null, // 'dine_in' | 'takeaway'
+  currentTable: null,
+  currentOrder: null,
+
+  /**
+   * Inicializa el POS
+   */
+  async init(container) {
+    this.cart = [];
+    this.products = [];
+    this.categories = [];
+    this.tables = [];
+    this.container = container; // Guardar referencia
+    this.mode = 'table-map';
+    this.orderType = null;
+    this.currentTable = null;
+    this.currentOrder = null;
+    await this.loadData();
+    this.render(container);
+    this.bindEvents();
+  },
+
+  /**
+   * Carga productos, categorías y mesas
+   */
+  async loadData() {
+    try {
+      const [productsRes, categoriesRes, tablesRes] = await Promise.all([
+        API.get('/products?available=true'),
+        API.get('/products/categories'),
+        API.get('/tables/map'),
+      ]);
+
+      this.products = Array.isArray(productsRes?.data) ? productsRes.data : [];
+      this.categories = Array.isArray(categoriesRes?.data) ? categoriesRes.data : [];
+      // El endpoint /tables/map devuelve { tables: [], zones: [], summary: {} }
+      this.tables = Array.isArray(tablesRes?.data?.tables) ? tablesRes.data.tables : [];
+      
+      console.log('Datos cargados:', { 
+        products: this.products.length, 
+        categories: this.categories.length, 
+        tables: this.tables.length 
+      });
+    } catch (err) {
+      Toast.error('Error cargando datos');
+      console.error('Error en loadData:', err);
+      // Asegurar arrays vacíos en caso de error
+      this.products = this.products || [];
+      this.categories = this.categories || [];
+      this.tables = this.tables || [];
+    }
+  },
+
+  /**
+   * Renderiza la vista del POS
+   */
+  render(container) {
+    console.log('POS.render called - mode:', this.mode, 'container:', container);
+    if (!container) {
+      console.error('Container not found!');
+      return;
+    }
+    
+    if (this.mode === 'table-map') {
+      this.renderTableMap(container);
+    } else {
+      this.renderOrdering(container);
+    }
+  },
+
+  /**
+   * Renderiza el mapa de mesas
+   */
+  renderTableMap(container) {
+    // Validar que tables sea un array
+    if (!Array.isArray(this.tables)) {
+      console.error('this.tables no es un array:', this.tables);
+      this.tables = [];
+    }
+
+    const zones = [...new Set(this.tables.map(t => t.zone))];
+    const freeCount = this.tables.filter(t => !t.active_sale_id).length;
+    const occupiedCount = this.tables.filter(t => t.active_sale_id).length;
+
+    container.innerHTML = `
+      <div class="pos-table-map-view">
+        <div class="pos-map-header">
+          <div class="pos-map-header-info">
+            <h2 class="pos-map-title">🍽️ Mapa de Mesas</h2>
+            <div class="pos-map-stats">
+              <div class="pos-map-stat free">
+                <span class="pos-map-stat-dot"></span>
+                <span class="pos-map-stat-num">${freeCount}</span>
+                <span class="pos-map-stat-label">Libres</span>
+              </div>
+              <div class="pos-map-stat occupied">
+                <span class="pos-map-stat-dot"></span>
+                <span class="pos-map-stat-num">${occupiedCount}</span>
+                <span class="pos-map-stat-label">Ocupadas</span>
+              </div>
+              <div class="pos-map-stat total-stat">
+                <span class="pos-map-stat-num">${this.tables.length}</span>
+                <span class="pos-map-stat-label">Total</span>
+              </div>
+            </div>
+          </div>
+          <button class="takeaway-btn" data-action="start-takeaway">
+            <span class="takeaway-btn-icon">🏃</span>
+            <span class="takeaway-btn-text">
+              <span class="takeaway-btn-title">PARA LLEVAR</span>
+              <span class="takeaway-btn-sub">Pedido sin mesa</span>
+            </span>
+          </button>
+        </div>
+
+        ${zones.length === 0 ? `
+          <div style="text-align:center;padding:80px 20px;color:var(--text-muted)">
+            <div style="font-size:4rem;margin-bottom:16px">🪑</div>
+            <h3 style="margin:0 0 8px;color:var(--text-primary)">No hay mesas configuradas</h3>
+            <p style="margin:0">Ve a Configuración → Mesas para crear tu mapa</p>
+          </div>
+        ` : zones.map(zone => `
+          <div class="table-zone">
+            <div class="table-zone-header">
+              <h3 class="table-zone-title">${zone}</h3>
+              <span class="table-zone-count">${this.tables.filter(t => t.zone === zone).length} mesas</span>
+            </div>
+            <div class="table-map-grid">
+              ${this.tables.filter(t => t.zone === zone).map(table => `
+                <div class="table-card ${table.active_sale_id ? 'occupied' : 'free'} shape-${table.shape}"
+                     data-action="select-table" data-table-id="${table.id}">
+                  <div class="table-card-inner">
+                    <div class="table-number">${table.name}</div>
+                    <div class="table-capacity">👥 ${table.capacity}</div>
+                    ${table.active_sale_id ? `
+                      <div class="table-order-info">
+                        <div class="table-order-number">${table.active_sale_number}</div>
+                        <div class="table-order-total">$${Number.parseFloat(table.active_total || 0).toFixed(2)}</div>
+                      </div>
+                    ` : ''}
+                    <div class="table-status-badge ${table.active_sale_id ? 'occupied' : 'free'}">${table.active_sale_id ? 'Ocupada' : 'Disponible'}</div>
+                  </div>
+                  ${table.active_sale_id ? '<div class="table-pulse"></div>' : ''}
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  },
+
+  /**
+   * Renderiza vista de pedido (productos + ticket)
+   */
+  renderOrdering(container) {
+    const filteredProducts = this.getFilteredProducts();
+
+    container.innerHTML = `
+      <!-- Breadcrumb -->
+      <div class="pos-breadcrumb">
+        <button class="pos-breadcrumb-back" onclick="POS.backToMap()">
+          <span class="breadcrumb-back-icon">←</span>
+          <span>Mapa</span>
+        </button>
+        <span class="pos-breadcrumb-divider">/</span>
+        <div class="pos-breadcrumb-current">
+          <span class="breadcrumb-type-badge ${this.orderType === 'dine_in' ? 'dine-in' : 'takeaway'}">
+            ${this.orderType === 'dine_in' ? `🏠 ${this.currentTable?.name || 'Mesa'}` : '📦 Para Llevar'}
+          </span>
+          ${this.currentOrder ? `<span class="breadcrumb-order-num">${this.currentOrder.sale_number}</span>` : '<span class="breadcrumb-new-order">Nuevo pedido</span>'}
+        </div>
+      </div>
+
+      <div class="pos-layout" style="height: calc(100vh - var(--header-height) - 50px);">
+        <!-- Panel de Productos -->
+        <div class="pos-products-panel">
+          <!-- Categorías -->
+          <div class="pos-categories" id="pos-categories">
+            <button class="pos-category-btn active" data-category="all" onclick="POS.filterCategory(null)">
+              <span class="pos-category-icon">🍽️</span>
+              <span>Todos</span>
+            </button>
+            ${this.categories.map((cat) => `
+              <button class="pos-category-btn" data-category="${cat.id}" onclick="POS.filterCategory(${cat.id})">
+                <span class="pos-category-icon">${cat.icon}</span>
+                <span>${cat.name}</span>
+              </button>
+            `).join('')}
+          </div>
+
+          <!-- Búsqueda -->
+          <div class="pos-search">
+            <div class="pos-search-wrapper">
+              <span class="pos-search-icon">🔍</span>
+              <input type="text" class="pos-search-input" id="pos-search" 
+                     placeholder="Buscar producto..." oninput="POS.search(this.value)">
+            </div>
+          </div>
+
+          <!-- Grid de Productos -->
+          <div class="pos-products-grid" id="pos-products-grid">
+            ${this.renderProducts(filteredProducts)}
+          </div>
+        </div>
+
+        <!-- Panel del Ticket -->
+        <div class="pos-ticket-panel">
+          <div class="pos-ticket-header">
+            <div class="pos-ticket-title">
+              🧾 Ticket de Venta
+              <span class="pos-ticket-count" id="cart-count">${this.cart.length}</span>
+            </div>
+            <button class="pos-ticket-clear" onclick="POS.clearCart()" ${this.cart.length === 0 ? 'style="display:none"' : ''}>
+              Limpiar todo
+            </button>
+          </div>
+
+          <!-- Items ya enviados a cocina (orden existente) -->
+          ${this.currentOrder && this.currentOrder.items && this.currentOrder.items.length > 0 ? `
+            <div class="pos-existing-items">
+              <div class="pos-existing-items-header">
+                <span>✅ Ya en cocina</span>
+                <span class="pos-existing-items-count">${this.currentOrder.items.length} items</span>
+              </div>
+              ${this.currentOrder.items.map(item => {
+                const itemPVP = parseFloat(item.subtotal) * (1 + parseFloat(item.tax_rate || 0) / 100);
+                return `
+                <div class="pos-existing-item">
+                  <span class="pos-existing-item-qty">${item.quantity}x</span>
+                  <span class="pos-existing-item-name">${item.product_name}</span>
+                  <span class="pos-existing-item-price">$${itemPVP.toFixed(2)}</span>
+                </div>
+              `}).join('')}
+            </div>
+          ` : ''}
+
+          <!-- Nuevos items (carrito) -->
+          ${this.cart.length > 0 ? `
+            <div class="pos-new-items-header" id="pos-new-items-header">
+              <span>🆕 Nuevos items</span>
+            </div>
+          ` : ''}
+
+          <!-- Items -->
+          <div id="pos-ticket-items" class="pos-ticket-items">
+            ${this.cart.length === 0 && !(this.currentOrder?.items?.length) ? this.renderEmptyCart() : 
+              this.cart.length === 0 ? '' : this.renderCartItems()}
+          </div>
+
+          <!-- Totales -->
+          <div class="pos-ticket-totals" id="pos-totals">
+            ${this.renderTotals()}
+          </div>
+
+          <!-- Botones de Acción -->
+          <div class="pos-action-buttons">
+            ${this.orderType === 'dine_in' && !this.currentOrder ? `
+              <!-- Dine-in: Enviar a cocina (nueva mesa) -->
+              <button class="pos-action-btn kitchen" onclick="POS.sendToKitchen()" 
+                      ${this.cart.length === 0 ? 'disabled' : ''} id="btn-send-kitchen">
+                <div class="pos-action-btn-icon">🔥</div>
+                <div class="pos-action-btn-text">
+                  <span class="pos-action-btn-title">ENVIAR A COCINA</span>
+                  <span class="pos-action-btn-sub">Preparar pedido · ${this.currentTable?.name || 'Mesa'}</span>
+                </div>
+              </button>
+            ` : this.orderType === 'dine_in' && this.currentOrder ? `
+              <!-- Dine-in: Con orden abierta -->
+              <div class="pos-action-group">
+                <!-- Fila 1: Agregar items (solo si hay nuevos) -->
+                <button class="pos-action-btn add-items full-width" onclick="POS.addItemsToOrder()" 
+                        ${this.cart.length === 0 ? 'disabled' : ''} id="btn-add-items">
+                  <div class="pos-action-btn-icon">🔥</div>
+                  <div class="pos-action-btn-text">
+                    <span class="pos-action-btn-title">ENVIAR NUEVOS A COCINA</span>
+                    <span class="pos-action-btn-sub">Agregar items al pedido</span>
+                  </div>
+                </button>
+                <!-- Fila 2: Botones de cobro (deshabilitados si hay items nuevos sin enviar) -->
+                <div class="pos-action-pay-row">
+                  <button class="pos-action-btn charge" onclick="POS.closeOrderModal('cash')" 
+                          ${this.cart.length > 0 ? 'disabled' : ''} id="btn-close-order">
+                    <div class="pos-action-btn-icon">💵</div>
+                    <div class="pos-action-btn-text">
+                      <span class="pos-action-btn-title">EFECTIVO</span>
+                      <span class="pos-action-btn-sub">$${this.currentOrder ? Number.parseFloat(this.currentOrder.active_total || this.currentOrder.total || 0).toFixed(2) : '0.00'}</span>
+                    </div>
+                  </button>
+                  <button class="pos-action-btn transfer" onclick="POS.closeOrderModal('transfer')" 
+                          ${this.cart.length > 0 ? 'disabled' : ''} id="btn-close-transfer">
+                    <div class="pos-action-btn-icon">📱</div>
+                    <div class="pos-action-btn-text">
+                      <span class="pos-action-btn-title">TRANSFER.</span>
+                      <span class="pos-action-btn-sub">Pago digital</span>
+                    </div>
+                  </button>
+                </div>
+              </div>
+            ` : `
+              <!-- Takeaway: Cobro inmediato -->
+              <button class="pos-action-btn cash" onclick="POS.openPaymentModal('cash')" 
+                      ${this.cart.length === 0 ? 'disabled' : ''} id="btn-pay-cash">
+                <div class="pos-action-btn-icon">💵</div>
+                <div class="pos-action-btn-text">
+                  <span class="pos-action-btn-title">EFECTIVO</span>
+                  <span class="pos-action-btn-sub">Pago en efectivo</span>
+                </div>
+              </button>
+              <button class="pos-action-btn transfer" onclick="POS.openPaymentModal('transfer')" 
+                      ${this.cart.length === 0 ? 'disabled' : ''} id="btn-pay-transfer">
+                <div class="pos-action-btn-icon">📱</div>
+                <div class="pos-action-btn-text">
+                  <span class="pos-action-btn-title">TRANSFERENCIA</span>
+                  <span class="pos-action-btn-sub">Pago por transferencia</span>
+                </div>
+              </button>
+            `}
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal de Pago (Redesigned) -->
+      <div class="modal-overlay payment-modal" id="payment-modal">
+        <div class="modal-content pay-modal-content">
+          <!-- Header compacto -->
+          <div class="pay-modal-header">
+            <div class="pay-modal-header-left">
+              <span class="pay-modal-icon" id="payment-modal-icon">💵</span>
+              <span class="pay-modal-title" id="payment-modal-title">Pago en Efectivo</span>
+            </div>
+            <button class="modal-close" onclick="POS.closePaymentModal()">✕</button>
+          </div>
+
+          <div class="pay-modal-body">
+            <!-- Resumen de consumo (visible al cobrar dine-in) -->
+            <div class="pay-order-summary" id="pay-order-summary" style="display:none">
+              <div class="pay-summary-label">📋 Detalle del consumo</div>
+              <div class="pay-summary-items" id="pay-summary-items"></div>
+            </div>
+
+            <!-- Total grande -->
+            <div class="pay-total-display">
+              <span class="pay-total-label">TOTAL</span>
+              <span class="pay-total-amount" id="payment-total">$0.00</span>
+            </div>
+
+            <!-- Sección Efectivo -->
+            <div id="payment-cash-section">
+              <!-- Input + Billetes + Monedas en layout compacto -->
+              <div class="pay-input-row">
+                <label class="form-label" style="margin-bottom:4px;font-size:0.8rem">Monto Recibido</label>
+                <div class="pay-input-wrapper">
+                  <span class="pay-input-currency">$</span>
+                  <input type="number" class="pay-input" id="payment-received" 
+                         step="0.01" min="0" placeholder="0.00" oninput="POS.calculateChange()">
+                  <button type="button" class="pay-exact-btn" onclick="POS.setExactAmount()" title="Valor justo">=</button>
+                </div>
+              </div>
+
+              <!-- Billetes (suman) -->
+              <div class="pay-denomination-row">
+                <span class="pay-denom-label">💵 Billetes</span>
+                <div class="pay-denom-buttons">
+                  <button type="button" class="pay-denom-btn bill" onclick="POS.addCashAmount(1)">$1</button>
+                  <button type="button" class="pay-denom-btn bill" onclick="POS.addCashAmount(5)">$5</button>
+                  <button type="button" class="pay-denom-btn bill accent-green" onclick="POS.addCashAmount(10)">$10</button>
+                  <button type="button" class="pay-denom-btn bill accent-blue" onclick="POS.addCashAmount(20)">$20</button>
+                  <button type="button" class="pay-denom-btn bill accent-purple" onclick="POS.addCashAmount(50)">$50</button>
+                  <button type="button" class="pay-denom-btn bill accent-gold" onclick="POS.addCashAmount(100)">$100</button>
+                </div>
+              </div>
+
+              <!-- Monedas (suman) -->
+              <div class="pay-denomination-row">
+                <span class="pay-denom-label">🪙 Monedas</span>
+                <div class="pay-denom-buttons">
+                  <button type="button" class="pay-denom-btn coin" onclick="POS.addCashAmount(0.05)">5¢</button>
+                  <button type="button" class="pay-denom-btn coin" onclick="POS.addCashAmount(0.10)">10¢</button>
+                  <button type="button" class="pay-denom-btn coin" onclick="POS.addCashAmount(0.25)">25¢</button>
+                  <button type="button" class="pay-denom-btn coin" onclick="POS.addCashAmount(0.50)">50¢</button>
+                  <button type="button" class="pay-denom-btn coin" onclick="POS.addCashAmount(1.00)">$1</button>
+                </div>
+              </div>
+
+              <!-- Cambio -->
+              <div class="pay-change-display" id="payment-change" style="display:none">
+                <span class="pay-change-label">Vuelto</span>
+                <span class="pay-change-amount" id="payment-change-value">$0.00</span>
+              </div>
+
+              <!-- Botón limpiar monto -->
+              <button type="button" class="pay-clear-amount" onclick="POS.clearCashAmount()" id="pay-clear-btn" style="display:none">
+                🗑️ Limpiar monto
+              </button>
+            </div>
+
+            <!-- Sección Transferencia -->
+            <div id="payment-transfer-section" style="display:none">
+              <div class="form-group">
+                <label class="form-label">Referencia</label>
+                <input type="text" class="form-input" id="payment-transfer-ref" 
+                       placeholder="Número de referencia">
+              </div>
+            </div>
+
+            <!-- Cliente (collapsible) -->
+            <details class="pay-client-details">
+              <summary class="pay-client-summary">👤 Datos del cliente (opcional)</summary>
+              <div class="pay-client-fields">
+                <div class="form-group">
+                  <label class="form-label">Cliente</label>
+                  <input type="text" class="form-input" id="payment-customer-name" 
+                         placeholder="Nombre" value="CONSUMIDOR FINAL">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">CI/RUC</label>
+                  <input type="text" class="form-input" id="payment-customer-id" 
+                         placeholder="9999999999999">
+                </div>
+              </div>
+            </details>
+          </div>
+
+          <!-- Footer fijo -->
+          <div class="pay-modal-footer">
+            <button class="pay-cancel-btn" onclick="POS.closePaymentModal()">Cancelar</button>
+            <button class="pay-confirm-btn" onclick="POS.processSale()" id="btn-process-sale">
+              <span class="pay-confirm-icon">✅</span>
+              <span class="pay-confirm-text">Procesar Venta</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  },
+
+  /**
+   * Renderiza productos
+   */
+  renderProducts(products) {
+    if (products.length === 0) {
+      return '<div class="empty-state"><div class="empty-state-icon">📦</div><div class="empty-state-text">No se encontraron productos</div></div>';
+    }
+
+    return products.map((product) => {
+      const pvp = parseFloat(product.price) * (1 + parseFloat(product.tax_rate) / 100);
+      return `
+      <div class="pos-product-card ${!product.available ? 'unavailable' : ''}" 
+           onclick="POS.addToCart(${product.id})">
+        <div class="pos-product-emoji">${product.category_icon || '🍽️'}</div>
+        <div class="pos-product-name">${product.name}</div>
+        <div class="pos-product-price">$${pvp.toFixed(2)}</div>
+      </div>
+    `;
+    }).join('');
+  },
+
+  /**
+   * Renderiza items del carrito
+   */
+  renderCartItems() {
+    return this.cart.map((item, index) => {
+      const lineTotal = item.pvp * item.quantity;
+      return `
+      <div class="pos-ticket-item">
+        <div class="pos-ticket-item-info">
+          <div class="pos-ticket-item-name">${item.productName}</div>
+          <div class="pos-ticket-item-price">$${item.pvp.toFixed(2)} c/u</div>
+        </div>
+        <div class="pos-ticket-item-qty">
+          <button class="pos-qty-btn" onclick="POS.updateQuantity(${index}, -1)">−</button>
+          <span class="pos-qty-value">${item.quantity}</span>
+          <button class="pos-qty-btn" onclick="POS.updateQuantity(${index}, 1)">+</button>
+        </div>
+        <div class="pos-ticket-item-subtotal">$${lineTotal.toFixed(2)}</div>
+        <button class="pos-ticket-item-remove" onclick="POS.removeFromCart(${index})">🗑️</button>
+      </div>
+    `;
+    }).join('');
+  },
+
+  renderEmptyCart() {
+    return `
+      <div class="pos-ticket-empty">
+        <div class="pos-ticket-empty-icon">🛒</div>
+        <div class="pos-ticket-empty-text">Agrega productos al ticket</div>
+      </div>
+    `;
+  },
+
+  /**
+   * Renderiza totales
+   */
+  renderTotals() {
+    const { taxTotal, total } = this.calculateTotals();
+    
+    // Si hay orden existente, mostrar el total completo de la cuenta
+    if (this.currentOrder && this.currentOrder.total) {
+      const orderTotal = parseFloat(this.currentOrder.total);
+      return `
+        ${this.cart.length > 0 ? `
+          <div class="pos-total-row" style="font-size:0.82rem;opacity:0.7">
+            <span>Nuevos items</span>
+            <span>+$${total.toFixed(2)}</span>
+          </div>
+        ` : ''}
+        <div class="pos-total-row total">
+          <span>CUENTA TOTAL</span>
+          <span class="pos-total-value">$${orderTotal.toFixed(2)}</span>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="pos-total-row total">
+        <span>TOTAL</span>
+        <span class="pos-total-value">$${total.toFixed(2)}</span>
+      </div>
+      ${taxTotal > 0 ? `
+        <div class="pos-total-row" style="font-size:0.75rem;opacity:0.6;margin-top:-4px">
+          <span>Incluye IVA</span>
+          <span>$${taxTotal.toFixed(2)}</span>
+        </div>
+      ` : ''}
+    `;
+  },
+
+  /**
+   * Calcula totales del carrito (basado en PVP = precio final al cliente)
+   * El PVP ya incluye IVA. El desglose es solo informativo.
+   */
+  calculateTotals() {
+    let total = 0;
+    let taxTotal = 0;
+
+    this.cart.forEach((item) => {
+      const pvp = item.pvp * item.quantity;
+      total += pvp;
+      // Desglose informativo: IVA incluido en el PVP
+      const base = pvp / (1 + item.taxRate / 100);
+      taxTotal += pvp - base;
+    });
+
+    const subtotal = total - taxTotal;
+    return { subtotal, taxTotal, total };
+  },
+
+  /**
+   * Agrega producto al carrito
+   */
+  addToCart(productId) {
+    const product = this.products.find((p) => p.id === productId);
+    if (!product) return;
+
+    const existingIndex = this.cart.findIndex((item) => item.productId === productId);
+
+    if (existingIndex >= 0) {
+      this.cart[existingIndex].quantity++;
+    } else {
+      const basePrice = parseFloat(product.price);
+      const taxRate = parseFloat(product.tax_rate);
+      const pvp = basePrice * (1 + taxRate / 100);
+      this.cart.push({
+        productId: product.id,
+        productName: product.name,
+        unitPrice: basePrice,   // Precio base (para enviar al backend)
+        pvp: Math.round(pvp * 100) / 100, // PVP redondeado (precio final al cliente)
+        taxRate: taxRate,
+        quantity: 1,
+        trackStock: product.track_stock,
+      });
+    }
+
+    this.updateTicketUI();
+  },
+
+  /**
+   * Actualiza cantidad de un item
+   */
+  updateQuantity(index, delta) {
+    if (!this.cart[index]) return;
+
+    this.cart[index].quantity += delta;
+    if (this.cart[index].quantity <= 0) {
+      this.cart.splice(index, 1);
+    }
+
+    this.updateTicketUI();
+  },
+
+  /**
+   * Elimina del carrito
+   */
+  removeFromCart(index) {
+    this.cart.splice(index, 1);
+    this.updateTicketUI();
+  },
+
+  /**
+   * Limpia el carrito
+   */
+  clearCart() {
+    this.cart = [];
+    this.updateTicketUI();
+  },
+
+  /**
+   * Actualiza la UI del ticket
+   */
+  updateTicketUI() {
+    const itemsEl = document.getElementById('pos-ticket-items');
+    const totalsEl = document.getElementById('pos-totals');
+    const countEl = document.getElementById('cart-count');
+    const clearBtn = document.querySelector('.pos-ticket-clear');
+    const cashBtn = document.getElementById('btn-pay-cash');
+    const transferBtn = document.getElementById('btn-pay-transfer');
+    const sendKitchenBtn = document.getElementById('btn-send-kitchen');
+    const addItemsBtn = document.getElementById('btn-add-items');
+    const newItemsHeader = document.getElementById('pos-new-items-header');
+
+    if (itemsEl) {
+      const hasExistingItems = this.currentOrder?.items?.length > 0;
+      itemsEl.innerHTML = this.cart.length === 0 && !hasExistingItems
+        ? this.renderEmptyCart()
+        : this.cart.length === 0 ? '' : this.renderCartItems();
+    }
+    if (totalsEl) totalsEl.innerHTML = this.renderTotals();
+    if (countEl) countEl.textContent = this.cart.length;
+    if (clearBtn) clearBtn.style.display = this.cart.length > 0 ? '' : 'none';
+    if (cashBtn) cashBtn.disabled = this.cart.length === 0;
+    if (transferBtn) transferBtn.disabled = this.cart.length === 0;
+    if (sendKitchenBtn) sendKitchenBtn.disabled = this.cart.length === 0;
+    if (addItemsBtn) addItemsBtn.disabled = this.cart.length === 0;
+    if (newItemsHeader) newItemsHeader.style.display = this.cart.length > 0 ? '' : 'none';
+
+    // Dine-in con orden abierta: bloquear cobro si hay items nuevos sin enviar
+    // y actualizar el monto del botón EFECTIVO
+    const closeOrderBtn = document.getElementById('btn-close-order');
+    const closeTransferBtn = document.getElementById('btn-close-transfer');
+    if (closeOrderBtn) {
+      closeOrderBtn.disabled = this.cart.length > 0;
+      // Actualizar monto: total orden + nuevos items del carrito
+      const orderTotal = parseFloat(this.currentOrder?.total || 0);
+      const cartTotal = this.calculateTotals().total;
+      const grandTotal = orderTotal + cartTotal;
+      const subEl = closeOrderBtn.querySelector('.pos-action-btn-sub');
+      if (subEl) subEl.textContent = `$${grandTotal.toFixed(2)}`;
+    }
+    if (closeTransferBtn) closeTransferBtn.disabled = this.cart.length > 0;
+  },
+
+  /**
+   * Filtra por categoría
+   */
+  filterCategory(categoryId) {
+    this.selectedCategory = categoryId;
+
+    document.querySelectorAll('.pos-category-btn').forEach((btn) => {
+      const btnCat = btn.dataset.category;
+      btn.classList.toggle('active', categoryId === null ? btnCat === 'all' : btnCat === String(categoryId));
+    });
+
+    const grid = document.getElementById('pos-products-grid');
+    if (grid) grid.innerHTML = this.renderProducts(this.getFilteredProducts());
+  },
+
+  /**
+   * Búsqueda de productos
+   */
+  search(term) {
+    this.searchTerm = term.toLowerCase();
+    const grid = document.getElementById('pos-products-grid');
+    if (grid) grid.innerHTML = this.renderProducts(this.getFilteredProducts());
+  },
+
+  /**
+   * Productos filtrados
+   */
+  getFilteredProducts() {
+    return this.products.filter((p) => {
+      const matchCategory = !this.selectedCategory || p.category_id === this.selectedCategory;
+      const matchSearch = !this.searchTerm || p.name.toLowerCase().includes(this.searchTerm);
+      return matchCategory && matchSearch;
+    });
+  },
+
+  /**
+   * Abre modal de pago
+   */
+  openPaymentModal(method, isClosingOrder = false) {
+    this.paymentMethod = method;
+    this.isClosingOrder = isClosingOrder;
+    const totalToPay = isClosingOrder && this.currentOrder
+      ? parseFloat(this.currentOrder.total)
+      : this.calculateTotals().total;
+
+    document.getElementById('payment-total').textContent = `$${totalToPay.toFixed(2)}`;
+    document.getElementById('payment-modal-title').textContent =
+      method === 'cash' ? 'Pago en Efectivo' : 'Pago por Transferencia';
+    document.getElementById('payment-modal-icon').textContent =
+      method === 'cash' ? '💵' : '📱';
+
+    document.getElementById('payment-cash-section').style.display = method === 'cash' ? '' : 'none';
+    document.getElementById('payment-transfer-section').style.display = method === 'transfer' ? '' : 'none';
+
+    // Mostrar resumen de consumo cuando es cierre de orden dine-in
+    const summaryEl = document.getElementById('pay-order-summary');
+    const summaryItemsEl = document.getElementById('pay-summary-items');
+    if (isClosingOrder && this.currentOrder && this.currentOrder.items && this.currentOrder.items.length > 0) {
+      summaryEl.style.display = '';
+      summaryItemsEl.innerHTML = this.currentOrder.items.map(item => {
+        const itemPVP = parseFloat(item.subtotal) * (1 + parseFloat(item.tax_rate || 0) / 100);
+        return `
+        <div class="pay-summary-item">
+          <span class="pay-summary-item-qty">${item.quantity}x</span>
+          <span class="pay-summary-item-name">${item.product_name}</span>
+          <span class="pay-summary-item-price">$${itemPVP.toFixed(2)}</span>
+        </div>
+      `}).join('');
+    } else if (!isClosingOrder && this.cart.length > 0) {
+      // Takeaway: mostrar items del carrito con PVP
+      summaryEl.style.display = '';
+      summaryItemsEl.innerHTML = this.cart.map(item => {
+        const pvpSubtotal = item.pvp * item.quantity;
+        return `
+        <div class="pay-summary-item">
+          <span class="pay-summary-item-qty">${item.quantity}x</span>
+          <span class="pay-summary-item-name">${item.productName}</span>
+          <span class="pay-summary-item-price">$${pvpSubtotal.toFixed(2)}</span>
+        </div>
+      `}).join('');
+    } else {
+      summaryEl.style.display = 'none';
+    }
+
+    if (method === 'cash') {
+      document.getElementById('payment-received').value = '';
+      document.getElementById('payment-change').style.display = 'none';
+      const clearBtn = document.getElementById('pay-clear-btn');
+      if (clearBtn) clearBtn.style.display = 'none';
+    }
+
+    document.getElementById('payment-modal').classList.add('active');
+
+    // Focus
+    setTimeout(() => {
+      const input = method === 'cash'
+        ? document.getElementById('payment-received')
+        : document.getElementById('payment-transfer-ref');
+      if (input) input.focus();
+    }, 300);
+  },
+
+  closePaymentModal() {
+    document.getElementById('payment-modal').classList.remove('active');
+  },
+
+  /**
+   * Suma dinero al monto recibido (billetes y monedas)
+   */
+  addCashAmount(amount) {
+    const input = document.getElementById('payment-received');
+    if (input) {
+      const current = parseFloat(input.value) || 0;
+      input.value = (current + amount).toFixed(2);
+      this.calculateChange();
+      // Mostrar botón limpiar
+      const clearBtn = document.getElementById('pay-clear-btn');
+      if (clearBtn) clearBtn.style.display = '';
+    }
+  },
+
+  /**
+   * Limpia el monto recibido
+   */
+  clearCashAmount() {
+    const input = document.getElementById('payment-received');
+    if (input) {
+      input.value = '';
+      this.calculateChange();
+      const clearBtn = document.getElementById('pay-clear-btn');
+      if (clearBtn) clearBtn.style.display = 'none';
+    }
+  },
+
+  /**
+   * Pone el valor justo (exacto al total)
+   */
+  setExactAmount() {
+    const totalToPay = (this.orderType === 'dine_in' && this.currentOrder)
+      ? parseFloat(this.currentOrder.total)
+      : this.calculateTotals().total;
+    const input = document.getElementById('payment-received');
+    if (input) {
+      input.value = totalToPay.toFixed(2);
+      this.calculateChange();
+      const clearBtn = document.getElementById('pay-clear-btn');
+      if (clearBtn) clearBtn.style.display = '';
+    }
+  },
+
+  /**
+   * Calcula el cambio
+   */
+  calculateChange() {
+    const isClosingOrder = this.orderType === 'dine_in' && this.currentOrder;
+    const totalToPay = isClosingOrder
+      ? parseFloat(this.currentOrder.total)
+      : this.calculateTotals().total;
+    const received = parseFloat(document.getElementById('payment-received').value) || 0;
+    const change = received - totalToPay;
+    const changeEl = document.getElementById('payment-change');
+    const changeValue = document.getElementById('payment-change-value');
+    const clearBtn = document.getElementById('pay-clear-btn');
+
+    if (clearBtn) clearBtn.style.display = received > 0 ? '' : 'none';
+
+    if (received > 0) {
+      changeEl.style.display = '';
+      changeValue.textContent = `$${Math.max(0, change).toFixed(2)}`;
+      changeValue.className = `pay-change-amount ${change >= 0 ? 'positive' : 'negative'}`;
+    } else {
+      changeEl.style.display = 'none';
+    }
+  },
+
+  /**
+   * Selecciona una mesa
+   */
+  async selectTable(tableId) {
+    console.log('selectTable called with ID:', tableId);
+    const table = this.tables.find(t => t.id === tableId);
+    if (!table) {
+      console.error('Table not found:', tableId);
+      return;
+    }
+    console.log('Table found:', table);
+
+    this.currentTable = table;
+    this.orderType = 'dine_in';
+    this.mode = 'ordering';
+    this.cart = [];
+
+    // Si tiene orden abierta, cargar sus datos
+    if (table.active_sale_id) {
+      try {
+        const res = await API.get(`/pos/sales/${table.active_sale_id}`);
+        if (res && res.data) {
+          this.currentOrder = { ...table, ...res.data };
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    } else {
+      this.currentOrder = null;
+    }
+
+    this.render(this.container);
+  },
+
+  /**
+   * Inicia modo Para Llevar
+   */
+  startTakeaway() {
+    console.log('startTakeaway called');
+    this.currentTable = null;
+    this.currentOrder = null;
+    this.orderType = 'takeaway';
+    this.mode = 'ordering';
+    this.cart = [];
+    this.render(this.container);
+  },
+
+  /**
+   * Vuelve al mapa de mesas
+   */
+  async backToMap() {
+    if (this.cart.length > 0) {
+      if (!confirm('Hay items en el carrito. ¿Deseas descartarlos y volver al mapa?')) {
+        return;
+      }
+    }
+    this.mode = 'table-map';
+    this.cart = [];
+    this.currentTable = null;
+    this.currentOrder = null;
+    this.orderType = null;
+    await this.loadData();
+    this.render(this.container);
+  },
+
+  /**
+   * Envía pedido a cocina (dine-in pending)
+   */
+  async sendToKitchen() {
+    if (this.cart.length === 0) return;
+
+    const btn = document.getElementById('btn-send-kitchen');
+    btn.disabled = true;
+    btn.classList.add('loading');
+    btn.querySelector('.pos-action-btn-title').textContent = 'Enviando...';
+
+    try {
+      const saleData = {
+        items: this.cart.map(item => ({
+          productId: item.productId,
+          productName: item.productName,
+          unitPrice: item.unitPrice,
+          taxRate: item.taxRate,
+          quantity: item.quantity,
+          trackStock: item.trackStock,
+        })),
+        orderType: 'dine_in',
+        tableId: this.currentTable.id,
+        paymentMethod: 'cash', // Se cobrará después
+      };
+
+      const res = await API.post('/pos/sales', saleData);
+      if (res && res.success) {
+        Toast.success(`✅ Pedido enviado a cocina - ${this.currentTable.name}`);
+        this.cart = [];
+        // Recargar datos de mesas para obtener active_sale_id actualizado
+        await this.loadData();
+        // Actualizar referencia a la mesa con datos frescos
+        const freshTable = this.tables.find(t => t.id === this.currentTable.id);
+        if (freshTable) this.currentTable = freshTable;
+        await this.selectTable(this.currentTable.id); // Reload con datos frescos
+      }
+    } catch (err) {
+      Toast.error(err.message || 'Error al enviar pedido');
+      btn.disabled = false;
+      btn.classList.remove('loading');
+      btn.querySelector('.pos-action-btn-title').textContent = 'ENVIAR A COCINA';
+    }
+  },
+
+  /**
+   * Agrega items a un pedido existente
+   */
+  async addItemsToOrder() {
+    if (this.cart.length === 0 || !this.currentOrder) return;
+
+    const btn = document.getElementById('btn-add-items');
+    btn.disabled = true;
+    btn.classList.add('loading');
+    btn.querySelector('.pos-action-btn-title').textContent = 'Agregando...';
+
+    try {
+      const data = {
+        items: this.cart.map(item => ({
+          productId: item.productId,
+          productName: item.productName,
+          unitPrice: item.unitPrice,
+          taxRate: item.taxRate,
+          quantity: item.quantity,
+          trackStock: item.trackStock,
+        })),
+      };
+
+      const res = await API.post(`/pos/orders/${this.currentOrder.id}/items`, data);
+      if (res && res.success) {
+        Toast.success(`✅ Items agregados al pedido`);
+        this.cart = [];
+        await this.selectTable(this.currentTable.id); // Reload
+      }
+    } catch (err) {
+      Toast.error(err.message || 'Error al agregar items');
+      btn.disabled = false;
+      btn.innerHTML = '<span>➕ Agregar Items</span>';
+    }
+  },
+
+  /**
+   * Abre modal de cierre de orden (cobro)
+   */
+  closeOrderModal(method = 'cash') {
+    if (!this.currentOrder) return;
+    this.openPaymentModal(method, true);
+  },
+
+  /**
+   * Procesa la venta (takeaway inmediato o cierre de orden dine-in)
+   */
+  async processSale() {
+    const { total } = this.calculateTotals();
+    const btn = document.getElementById('btn-process-sale');
+    const isClosingOrder = this.orderType === 'dine_in' && this.currentOrder;
+
+    // Validaciones
+    if (this.paymentMethod === 'cash') {
+      const received = parseFloat(document.getElementById('payment-received').value) || 0;
+      const totalToPay = isClosingOrder ? parseFloat(this.currentOrder.total) : total;
+      if (received < totalToPay) {
+        Toast.warning('El monto recibido es menor al total');
+        return;
+      }
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<div class="spinner"></div><span class="pay-confirm-text">Procesando...</span>';
+
+    try {
+      if (isClosingOrder) {
+        // Cerrar orden existente
+        const closeData = {
+          paymentMethod: this.paymentMethod,
+          amountReceived: this.paymentMethod === 'cash'
+            ? parseFloat(document.getElementById('payment-received').value)
+            : parseFloat(this.currentOrder.total),
+          transferRef: this.paymentMethod === 'transfer'
+            ? document.getElementById('payment-transfer-ref').value
+            : null,
+          customerName: document.getElementById('payment-customer-name').value || 'CONSUMIDOR FINAL',
+          customerIdNumber: document.getElementById('payment-customer-id').value || '9999999999999',
+        };
+
+        const res = await API.post(`/pos/orders/${this.currentOrder.id}/close`, closeData);
+        if (res && res.success) {
+          Toast.success(`✅ Cuenta cerrada - ${this.currentOrder.sale_number} - $${parseFloat(res.data.total).toFixed(2)}`);
+          this.closePaymentModal();
+          this.backToMap();
+        }
+      } else {
+        // Venta takeaway inmediata
+        const saleData = {
+          items: this.cart.map((item) => ({
+            productId: item.productId,
+            productName: item.productName,
+            unitPrice: item.unitPrice,
+            taxRate: item.taxRate,
+            quantity: item.quantity,
+            trackStock: item.trackStock,
+          })),
+          orderType: 'takeaway',
+          paymentMethod: this.paymentMethod,
+          amountReceived: this.paymentMethod === 'cash'
+            ? parseFloat(document.getElementById('payment-received').value)
+            : total,
+          transferRef: this.paymentMethod === 'transfer'
+            ? document.getElementById('payment-transfer-ref').value
+            : null,
+          customerName: document.getElementById('payment-customer-name').value || 'CONSUMIDOR FINAL',
+          customerIdNumber: document.getElementById('payment-customer-id').value || '9999999999999',
+        };
+
+        const res = await API.post('/pos/sales', saleData);
+        if (res && res.success) {
+          Toast.success(`✅ Venta ${res.data.sale.sale_number} registrada - $${parseFloat(res.data.sale.total).toFixed(2)}`);
+          this.closePaymentModal();
+          this.clearCart();
+          this.backToMap();
+        }
+      }
+    } catch (err) {
+      Toast.error(err.message || 'Error al procesar');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<span class="pay-confirm-icon">✅</span><span class="pay-confirm-text">Procesar Venta</span>';
+    }
+  },
+
+  bindEvents() {
+    console.log('POS.bindEvents called');
+    
+    // Event delegation para clicks en el POS
+    document.addEventListener('click', (e) => {
+      if (App.currentPage !== 'pos') return;
+      
+      const target = e.target.closest('[data-action]');
+      if (!target) return;
+      
+      const action = target.dataset.action;
+      console.log('POS action clicked:', action);
+      
+      switch (action) {
+        case 'select-table':
+          const tableId = parseInt(target.dataset.tableId);
+          console.log('Selecting table:', tableId);
+          if (tableId) this.selectTable(tableId);
+          break;
+        case 'start-takeaway':
+          console.log('Starting takeaway mode');
+          this.startTakeaway();
+          break;
+      }
+    });
+
+    // Atajos de teclado
+    document.addEventListener('keydown', (e) => {
+      if (App.currentPage !== 'pos') return;
+
+      if (e.key === 'F2') {
+        e.preventDefault();
+        if (this.cart.length > 0) this.openPaymentModal('cash');
+      }
+      if (e.key === 'F3') {
+        e.preventDefault();
+        if (this.cart.length > 0) this.openPaymentModal('transfer');
+      }
+      if (e.key === 'Escape') {
+        this.closePaymentModal();
+      }
+      if (e.key === 'F4') {
+        e.preventDefault();
+        document.getElementById('pos-search')?.focus();
+      }
+    });
+  },
+};
+
+window.POS = POS;

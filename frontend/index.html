@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description"
+    content="RestaurantePOS - Sistema de Gestión para Restaurante. Punto de Venta, Facturación, Inventario y más.">
+  <title>RestaurantePOS - Sistema de Gestión</title>
+
+  <!-- Favicon -->
+  <link rel="icon"
+    href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍽️</text></svg>">
+
+  <!-- Estilos -->
+  <link rel="stylesheet" href="assets/css/global.css">
+  <link rel="stylesheet" href="assets/css/components.css">
+  <link rel="stylesheet" href="assets/css/layout.css">
+  <link rel="stylesheet" href="assets/css/login.css">
+  <link rel="stylesheet" href="assets/css/pos.css">
+</head>
+
+<body>
+
+  <div id="app">
+    <!-- ═══ Login Screen ═══ -->
+    <div class="login-wrapper">
+      <div class="login-card">
+        <div class="login-logo">
+          <div class="login-logo-icon">🍽️</div>
+          <h1 class="login-title">RestaurantePOS</h1>
+          <p class="login-subtitle">Sistema de Gestión para Restaurante</p>
+        </div>
+
+        <div class="login-error" id="login-error">
+          <span>⚠️</span>
+          <span class="error-text"></span>
+        </div>
+
+        <form class="login-form" id="login-form">
+          <div class="login-input-group">
+            <span class="login-input-icon">👤</span>
+            <input type="text" class="login-input" id="login-username" placeholder="Usuario" autocomplete="username"
+              autofocus>
+          </div>
+
+          <div class="login-input-group">
+            <span class="login-input-icon">🔒</span>
+            <input type="password" class="login-input" id="login-password" placeholder="Contraseña"
+              autocomplete="current-password">
+          </div>
+
+          <button type="submit" class="login-btn" id="login-btn">
+            🔐 Iniciar Sesión
+          </button>
+        </form>
+
+        <div class="login-footer">
+          <p>RestaurantePOS v1.0.0 — Sistema de Gestión</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Socket.IO (para comandera digital) -->
+  <script src="/socket.io/socket.io.js"></script>
+
+  <!-- Core JS -->
+  <script src="assets/js/api.js"></script>
+  <script src="assets/js/app.js"></script>
+
+  <!-- Módulos -->
+  <script src="assets/js/auth/login.js"></script>
+  <script src="assets/js/pos/pos.js"></script>
+  <script src="assets/js/kitchen/kitchen.js"></script>
+  <script src="assets/js/products/products.js"></script>
+  <script src="assets/js/inventory/inventory.js"></script>
+  <script src="assets/js/recipes/recipes.js"></script>
+  <script src="assets/js/investments/investments.js"></script>
+  <script src="assets/js/payroll/payroll.js"></script>
+  <script src="assets/js/reports/reports.js"></script>
+  <script src="assets/js/users/users.js"></script>
+  <script src="assets/js/config/config.js"></script>
+
+</body>
+
+</html>

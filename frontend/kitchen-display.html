@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🍽️ Comandera Digital - RestaurantePOS</title>
+    <link rel="stylesheet" href="/assets/css/global.css">
+    <link rel="stylesheet" href="/assets/css/components.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: var(--bg-primary); color: var(--text-primary); font-family: var(--font-family); overflow: hidden; }
+
+        /* ── Header ── */
+        .kitchen-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 12px 24px; background: var(--bg-secondary);
+            border-bottom: 2px solid var(--accent-primary);
+        }
+        .kitchen-header h1 { font-size: 1.3rem; font-weight: 800; }
+        .kitchen-header-right { display: flex; align-items: center; gap: 16px; }
+        .kitchen-stats { display: flex; gap: 12px; }
+        .kitchen-stat {
+            display: flex; align-items: center; gap: 6px;
+            padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 700;
+        }
+        .stat-pending { background: rgba(239,68,68,0.15); color: #ef4444; }
+        .stat-preparing { background: rgba(245,158,11,0.15); color: #f59e0b; }
+        .stat-ready { background: rgba(16,185,129,0.15); color: #10b981; }
+        .kitchen-clock { color: var(--accent-primary); font-size: 1.1rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+        /* ── Grid 3 columnas ── */
+        .kitchen-grid {
+            display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;
+            padding: 12px; height: calc(100vh - 60px); overflow: hidden;
+        }
+        .kitchen-col {
+            overflow-y: auto; background: var(--bg-card); border-radius: 12px;
+            padding: 10px; border: 1px solid var(--border-color);
+            scrollbar-width: thin;
+        }
+        .kitchen-col::-webkit-scrollbar { width: 6px; }
+        .kitchen-col::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
+
+        .kitchen-col-title {
+            text-align: center; padding: 10px; margin-bottom: 8px;
+            font-weight: 700; font-size: 1rem; border-radius: 8px;
+            position: sticky; top: 0; z-index: 2;
+        }
+        .col-pending .kitchen-col-title { background: rgba(239,68,68,0.15); color: #ef4444; }
+        .col-preparing .kitchen-col-title { background: rgba(245,158,11,0.15); color: #f59e0b; }
+        .col-ready .kitchen-col-title { background: rgba(16,185,129,0.15); color: #10b981; }
+
+        /* ── Order Card ── */
+        .order-card {
+            background: var(--bg-secondary); border: 1px solid var(--border-color);
+            border-radius: 10px; padding: 12px; margin-bottom: 8px;
+            border-left: 4px solid var(--accent-primary);
+            animation: fadeIn 0.3s ease;
+            transition: box-shadow 0.2s;
+        }
+        .order-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+        .order-card.takeaway { border-left-color: #fb923c; }
+        .order-card.urgent { border-left-color: #ef4444; animation: urgentPulse 1.5s infinite; }
+
+        .order-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        .order-number { font-weight: 800; font-size: 1rem; color: var(--accent-primary); }
+        .order-card.takeaway .order-number { color: #fb923c; }
+        .order-meta { display: flex; align-items: center; gap: 8px; }
+        .order-time { font-size: 0.75rem; color: var(--text-muted); }
+        .order-elapsed {
+            font-size: 0.7rem; font-weight: 700; padding: 2px 8px;
+            border-radius: 10px; font-variant-numeric: tabular-nums;
+        }
+        .elapsed-ok { background: rgba(16,185,129,0.15); color: #10b981; }
+        .elapsed-warn { background: rgba(245,158,11,0.15); color: #f59e0b; }
+        .elapsed-danger { background: rgba(239,68,68,0.15); color: #ef4444; }
+
+        .order-type-badge {
+            display: inline-block; font-size: 0.7rem; font-weight: 700;
+            padding: 2px 8px; border-radius: 4px; margin-bottom: 6px;
+        }
+        .badge-dinein { background: #10b981; color: white; }
+        .badge-takeaway { background: #fb923c; color: white; }
+
+        .order-items { list-style: none; padding: 0; margin: 0 0 10px; }
+        .order-items li { padding: 4px 0; font-size: 0.88rem; border-bottom: 1px dashed var(--border-color); }
+        .order-items li:last-child { border-bottom: none; }
+        .order-items .item-qty { font-weight: 800; color: var(--accent-primary); margin-right: 4px; }
+        .order-items .item-notes { display: block; font-size: 0.75rem; color: var(--text-muted); font-style: italic; margin-left: 20px; }
+
+        .order-notes { font-size: 0.78rem; color: var(--text-muted); margin-bottom: 8px; padding: 4px 8px; background: var(--bg-primary); border-radius: 6px; }
+
+        .order-btn {
+            width: 100%; padding: 10px; border: none; border-radius: 8px;
+            font-weight: 700; cursor: pointer; font-size: 0.9rem;
+            transition: all 0.2s; text-transform: uppercase; letter-spacing: 0.5px;
+        }
+        .order-btn:hover { transform: translateY(-1px); box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
+        .order-btn:active { transform: translateY(0); }
+        .btn-prepare { background: linear-gradient(135deg, #f59e0b, #d97706); color: #000; }
+        .btn-ready { background: linear-gradient(135deg, #10b981, #059669); color: #fff; }
+        .btn-deliver { background: linear-gradient(135deg, #3b82f6, #2563eb); color: #fff; }
+
+        .empty-msg {
+            text-align: center; padding: 60px 16px; color: var(--text-muted);
+            font-size: 0.9rem; opacity: 0.6;
+        }
+        .empty-msg .empty-icon { font-size: 2.5rem; margin-bottom: 8px; }
+
+        /* ── Notification flash ── */
+        .new-order-flash {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 999;
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white; text-align: center; padding: 12px;
+            font-weight: 700; font-size: 1.1rem;
+            animation: flashSlide 3s forwards;
+        }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes urgentPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); } 50% { box-shadow: 0 0 0 6px rgba(239,68,68,0.15); } }
+        @keyframes flashSlide { 0% { transform: translateY(-100%); } 10% { transform: translateY(0); } 85% { transform: translateY(0); } 100% { transform: translateY(-100%); } }
+    </style>
+</head>
+<body>
+    <div class="kitchen-header">
+        <h1>👨‍🍳 Comandera Digital</h1>
+        <div class="kitchen-header-right">
+            <div class="kitchen-stats" id="kitchen-stats"></div>
+            <div class="kitchen-clock" id="clock"></div>
+        </div>
+    </div>
+    <div class="kitchen-grid" id="kitchen-grid">
+        <div class="kitchen-col col-pending"><div class="kitchen-col-title">🔴 Pendientes (0)</div><div class="empty-msg"><div class="empty-icon">✨</div>Cargando...</div></div>
+        <div class="kitchen-col col-preparing"><div class="kitchen-col-title">🟡 Preparando (0)</div><div class="empty-msg"><div class="empty-icon">👨‍🍳</div>Cargando...</div></div>
+        <div class="kitchen-col col-ready"><div class="kitchen-col-title">🟢 Listos (0)</div><div class="empty-msg"><div class="empty-icon">🍽️</div>Cargando...</div></div>
+    </div>
+    <div id="notification-area"></div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const API_BASE = window.location.origin + '/api';
+        // Token: try from opener, then from own localStorage (same origin)
+        const token = (window.opener && window.opener.localStorage)
+            ? window.opener.localStorage.getItem('token')
+            : localStorage.getItem('token');
+
+        // ── Fetch orders ──
+        async function fetchOrders() {
+            try {
+                const res = await fetch(API_BASE + '/kitchen/orders/active', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                const data = await res.json();
+                return data.data || [];
+            } catch (e) { console.error('Error fetching orders:', e); return []; }
+        }
+
+        // ── Elapsed time helper ──
+        function getElapsed(createdAt) {
+            const diff = Math.floor((Date.now() - new Date(createdAt).getTime()) / 60000);
+            if (diff < 1) return { text: '<1 min', cls: 'elapsed-ok' };
+            if (diff < 10) return { text: diff + ' min', cls: 'elapsed-ok' };
+            if (diff < 20) return { text: diff + ' min', cls: 'elapsed-warn' };
+            return { text: diff + ' min', cls: 'elapsed-danger' };
+        }
+
+        // ── Render ──
+        function renderOrders(orders) {
+            const pending = orders.filter(o => o.status === 'pending');
+            const preparing = orders.filter(o => o.status === 'preparing');
+            const ready = orders.filter(o => o.status === 'ready');
+
+            // Stats
+            document.getElementById('kitchen-stats').innerHTML =
+                '<div class="kitchen-stat stat-pending">🔴 ' + pending.length + '</div>' +
+                '<div class="kitchen-stat stat-preparing">🟡 ' + preparing.length + '</div>' +
+                '<div class="kitchen-stat stat-ready">🟢 ' + ready.length + '</div>';
+
+            document.getElementById('kitchen-grid').innerHTML =
+                renderColumn('🔴 Pendientes', pending, 'preparing', 'col-pending', 'btn-prepare', '👨‍🍳 Preparar') +
+                renderColumn('🟡 Preparando', preparing, 'ready', 'col-preparing', 'btn-ready', '✅ Listo') +
+                renderColumn('🟢 Listos', ready, 'delivered', 'col-ready', 'btn-deliver', '🍽️ Entregado');
+        }
+
+        function renderColumn(title, orders, nextStatus, colClass, btnClass, btnLabel) {
+            const emptyIcons = { 'col-pending': '✨', 'col-preparing': '👨‍🍳', 'col-ready': '🍽️' };
+            const emptyMsgs = { 'col-pending': 'Sin pedidos pendientes', 'col-preparing': 'Nada en preparación', 'col-ready': 'Sin pedidos listos' };
+            return '<div class="kitchen-col ' + colClass + '">' +
+                '<div class="kitchen-col-title">' + title + ' (' + orders.length + ')</div>' +
+                (orders.length === 0
+                    ? '<div class="empty-msg"><div class="empty-icon">' + (emptyIcons[colClass]||'') + '</div>' + (emptyMsgs[colClass]||'Sin órdenes') + '</div>'
+                    : orders.map(function(o) { return renderCard(o, nextStatus, btnClass, btnLabel); }).join('')) +
+            '</div>';
+        }
+
+        function renderCard(o, nextStatus, btnClass, btnLabel) {
+            var items = o.items || [];
+            var time = new Date(o.created_at).toLocaleTimeString('es-EC', {hour:'2-digit',minute:'2-digit'});
+            var elapsed = getElapsed(o.created_at);
+            var isTakeaway = (o.order_type === 'takeaway');
+            var typeLabel = isTakeaway ? '📦 Para Llevar' : '🏠 ' + (o.table_name || 'Mesa');
+            var badgeClass = isTakeaway ? 'badge-takeaway' : 'badge-dinein';
+            var cardClass = 'order-card' + (isTakeaway ? ' takeaway' : '') + (elapsed.cls === 'elapsed-danger' ? ' urgent' : '');
+
+            return '<div class="' + cardClass + '">' +
+                '<div class="order-header">' +
+                    '<span class="order-number">#' + (o.sale_number || o.id) + '</span>' +
+                    '<div class="order-meta">' +
+                        '<span class="order-elapsed ' + elapsed.cls + '">' + elapsed.text + '</span>' +
+                        '<span class="order-time">⏰ ' + time + '</span>' +
+                    '</div>' +
+                '</div>' +
+                '<span class="order-type-badge ' + badgeClass + '">' + typeLabel + '</span>' +
+                '<ul class="order-items">' +
+                    items.filter(function(i){return i.id;}).map(function(i) {
+                        return '<li><span class="item-qty">' + i.quantity + 'x</span> ' + i.product_name +
+                            (i.notes ? '<span class="item-notes">📝 ' + i.notes + '</span>' : '') + '</li>';
+                    }).join('') +
+                '</ul>' +
+                (o.notes ? '<div class="order-notes">📝 ' + o.notes + '</div>' : '') +
+                '<button class="order-btn ' + btnClass + '" onclick="updateStatus(' + o.id + ',\'' + nextStatus + '\')">' + btnLabel + '</button>' +
+            '</div>';
+        }
+
+        async function updateStatus(orderId, status) {
+            try {
+                await fetch(API_BASE + '/kitchen/orders/' + orderId + '/status', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                    body: JSON.stringify({ status: status })
+                });
+                var orders = await fetchOrders();
+                renderOrders(orders);
+            } catch(e) { console.error('Error updating status:', e); }
+        }
+
+        // ── Clock ──
+        function updateClock() {
+            document.getElementById('clock').textContent = new Date().toLocaleTimeString('es-EC', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // ── Auto-refresh elapsed times every 30s ──
+        setInterval(function() {
+            fetchOrders().then(renderOrders);
+        }, 30000);
+
+        // ── Socket.IO ──
+        var socket = io();
+        socket.emit('join-kitchen');
+
+        socket.on('new-kitchen-order', function(data) {
+            // Flash notification
+            var notif = document.createElement('div');
+            notif.className = 'new-order-flash';
+            notif.textContent = '🆕 Nueva orden: ' + (data.saleNumber || 'Nuevo pedido');
+            document.getElementById('notification-area').appendChild(notif);
+            setTimeout(function(){ notif.remove(); }, 3500);
+
+            // Play sound if available
+            try { new Audio('data:audio/wav;base64,UklGRl9vT19teleXQAIABAAAA...').play(); } catch(e){}
+
+            fetchOrders().then(renderOrders);
+        });
+
+        socket.on('kitchen-order-updated', function() {
+            fetchOrders().then(renderOrders);
+        });
+
+        // ── Initial load ──
+        fetchOrders().then(renderOrders);
+    </script>
+</body>
+</html>
