@@ -4,7 +4,12 @@ const { success, error } = require('../utils/responses');
 class PosController {
     async createSale(req, res, next) {
         try {
-            const { items, paymentMethod, amountReceived, transferRef, customerName, customerIdNumber, notes, orderType, tableId } = req.body;
+            let { items, paymentMethod, amountReceived, transferRef, customerName, customerIdNumber, notes, orderType, tableId } = req.body;
+
+            // Fix: For dine_in (pending orders), paymentMethod might be missing. Default to 'cash' temporarily.
+            if (orderType === 'dine_in' && !paymentMethod) {
+                paymentMethod = 'cash';
+            }
 
             if (!items || !items.length) {
                 return error(res, 'Debe incluir al menos un producto', 400);

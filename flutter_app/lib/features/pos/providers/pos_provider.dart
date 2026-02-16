@@ -16,7 +16,7 @@ class PosProvider extends ChangeNotifier {
   // Current order context
   Map<String, dynamic>? _currentTable;
   Map<String, dynamic>? _currentOrder;
-  String _orderType = 'takeaway'; // 'dine_in' | 'takeaway'
+  String _orderType = 'dine_in'; // 'dine_in' | 'takeaway'
 
   List<Map<String, dynamic>> get products => _products;
   List<Map<String, dynamic>> get categories => _categories;
@@ -71,7 +71,13 @@ class PosProvider extends ChangeNotifier {
 
       _products = List<Map<String, dynamic>>.from(results[0]['data'] ?? []);
       _categories = List<Map<String, dynamic>>.from(results[1]['data'] ?? []);
-      _tables = List<Map<String, dynamic>>.from(results[2]['data'] ?? []);
+      // Fix: Access 'tables' property from map response
+      final tablesData = results[2]['data'];
+      _tables = List<Map<String, dynamic>>.from(
+        (tablesData is Map && tablesData.containsKey('tables')) 
+            ? tablesData['tables'] 
+            : (tablesData ?? [])
+      );
     } catch (e) {
       debugPrint('Error loading POS data: $e');
     }
@@ -83,7 +89,13 @@ class PosProvider extends ChangeNotifier {
   Future<void> refreshTables() async {
     try {
       final res = await _api.get('/tables/map');
-      _tables = List<Map<String, dynamic>>.from(res['data'] ?? []);
+      // Fix: Access 'tables' property from map response
+      final tablesData = res['data'];
+      _tables = List<Map<String, dynamic>>.from(
+        (tablesData is Map && tablesData.containsKey('tables')) 
+            ? tablesData['tables'] 
+            : (tablesData ?? [])
+      );
       notifyListeners();
     } catch (e) {
       debugPrint('Error refreshing tables: $e');
@@ -196,7 +208,7 @@ class PosProvider extends ChangeNotifier {
         body['tableId'] = _currentTable!['id'];
       }
 
-      final res = await _api.post('/sales', body);
+      final res = await _api.post('/pos/sales', body);
       _cart = [];
       await refreshTables();
       notifyListeners();
@@ -218,7 +230,7 @@ class PosProvider extends ChangeNotifier {
         }).toList(),
       };
 
-      final res = await _api.post('/sales/$orderId/items', body);
+      final res = await _api.post('/pos/orders/$orderId/items', body);
       _cart = [];
       await refreshTables();
       notifyListeners();
@@ -243,7 +255,7 @@ class PosProvider extends ChangeNotifier {
         if (customerRuc != null && customerRuc.isNotEmpty) 'customerRuc': customerRuc,
       };
 
-      final res = await _api.post('/sales/$orderId/close', body);
+      final res = await _api.post('/pos/orders/$orderId/close', body);
       _currentOrder = null;
       _currentTable = null;
       _cart = [];
@@ -277,7 +289,7 @@ class PosProvider extends ChangeNotifier {
         if (customerRuc != null && customerRuc.isNotEmpty) 'customerRuc': customerRuc,
       };
 
-      final res = await _api.post('/sales', body);
+      final res = await _api.post('/pos/sales', body);
       _cart = [];
       notifyListeners();
       return res;

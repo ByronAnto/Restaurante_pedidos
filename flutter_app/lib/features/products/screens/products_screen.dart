@@ -171,8 +171,15 @@ class _ProductsScreenState extends State<ProductsScreen> {
     final nameC = TextEditingController(text: product?['name']?.toString() ?? '');
     final priceC = TextEditingController(text: product?['price']?.toString() ?? '');
     final costC = TextEditingController(text: product?['cost']?.toString() ?? '0');
-    String taxRate = (product?['tax_rate'] ?? 15).toString();
+    // Fix: Normalize taxRate to integer string (e.g. "15.00" -> "15")
+    String taxRate = (product?['tax_rate'] ?? 15).toDouble().toInt().toString(); 
+    
     String? categoryId = product?['category_id']?.toString();
+    // Fix: Ensure categoryId exists in _categories, otherwise null
+    if (_categories.every((c) => c['id']?.toString() != categoryId)) {
+      categoryId = null;
+    }
+    
     bool available = product?['available'] == true || product?['available'] == 1;
 
     showDialog(
@@ -187,13 +194,13 @@ class _ProductsScreenState extends State<ProductsScreen> {
                 TextField(controller: nameC, decoration: const InputDecoration(labelText: 'Nombre *')),
                 const SizedBox(height: 10),
                 DropdownButtonFormField<String>(
-                  initialValue: categoryId,
+                  value: categoryId, // Changed from initialValue to value
                   decoration: const InputDecoration(labelText: 'Categoría'),
                   items: _categories.map((c) => DropdownMenuItem(
                     value: c['id']?.toString(),
                     child: Text(c['name']?.toString() ?? ''),
                   )).toList(),
-                  onChanged: (v) => categoryId = v,
+                  onChanged: (v) => setDialogState(() => categoryId = v),
                 ),
                 const SizedBox(height: 10),
                 TextField(
@@ -209,14 +216,14 @@ class _ProductsScreenState extends State<ProductsScreen> {
                 ),
                 const SizedBox(height: 10),
                 DropdownButtonFormField<String>(
-                  initialValue: taxRate,
+                  value: taxRate, // Changed from initialValue to value
                   decoration: const InputDecoration(labelText: 'IVA'),
                   items: const [
                     DropdownMenuItem(value: '0', child: Text('0%')),
                     DropdownMenuItem(value: '12', child: Text('12%')),
                     DropdownMenuItem(value: '15', child: Text('15%')),
                   ],
-                  onChanged: (v) => taxRate = v ?? '15',
+                  onChanged: (v) => setDialogState(() => taxRate = v ?? '15'),
                 ),
                 const SizedBox(height: 10),
                 if (isEdit)
