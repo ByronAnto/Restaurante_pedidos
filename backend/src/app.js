@@ -265,6 +265,14 @@ const autoBootstrap = async () => {
             await client.query(`ALTER TABLE kitchen_orders ADD COLUMN IF NOT EXISTS order_type VARCHAR(20) DEFAULT 'dine_in'`);
             await client.query(`ALTER TABLE kitchen_orders ADD COLUMN IF NOT EXISTS table_name VARCHAR(50)`);
 
+            // Migraciones Anulación de pedidos
+            await client.query(`ALTER TABLE sales ADD COLUMN IF NOT EXISTS voided_at TIMESTAMP`);
+            await client.query(`ALTER TABLE sales ADD COLUMN IF NOT EXISTS voided_by INT`);
+            await client.query(`ALTER TABLE sales ADD COLUMN IF NOT EXISTS void_reason TEXT`);
+            // Ampliar CHECK de status para incluir 'voided'
+            await client.query(`ALTER TABLE sales DROP CONSTRAINT IF EXISTS sales_status_check`);
+            await client.query(`ALTER TABLE sales ADD CONSTRAINT sales_status_check CHECK (status IN ('pending','completed','cancelled','voided'))`);
+
 
             // Seed si la DB está vacía
             const { rows } = await client.query('SELECT COUNT(*) FROM users');

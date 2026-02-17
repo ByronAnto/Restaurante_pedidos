@@ -83,6 +83,8 @@ const POS = {
       this.renderTableMap(container);
     } else {
       this.renderOrdering(container);
+      // Inicializar scroll de categorías después del render
+      this.initCategoryScroll();
     }
   },
 
@@ -194,17 +196,21 @@ const POS = {
         <!-- Panel de Productos -->
         <div class="pos-products-panel">
           <!-- Categorías -->
-          <div class="pos-categories" id="pos-categories">
-            <button class="pos-category-btn active" data-category="all" onclick="POS.filterCategory(null)">
-              <span class="pos-category-icon">🍽️</span>
-              <span>Todos</span>
-            </button>
-            ${this.categories.map((cat) => `
-              <button class="pos-category-btn" data-category="${cat.id}" onclick="POS.filterCategory(${cat.id})">
-                <span class="pos-category-icon">${cat.icon}</span>
-                <span>${cat.name}</span>
+          <div class="pos-categories-wrapper">
+            <button class="pos-cat-arrow pos-cat-arrow-left" id="cat-arrow-left" onclick="POS.scrollCategories(-1)">‹</button>
+            <div class="pos-categories" id="pos-categories">
+              <button class="pos-category-btn active" data-category="all" onclick="POS.filterCategory(null)">
+                <span class="pos-category-icon">🍽️</span>
+                <span>Todos</span>
               </button>
-            `).join('')}
+              ${this.categories.map((cat) => `
+                <button class="pos-category-btn" data-category="${cat.id}" onclick="POS.filterCategory(${cat.id})">
+                  <span class="pos-category-icon">${cat.icon}</span>
+                  <span>${cat.name}</span>
+                </button>
+              `).join('')}
+            </div>
+            <button class="pos-cat-arrow pos-cat-arrow-right" id="cat-arrow-right" onclick="POS.scrollCategories(1)">›</button>
           </div>
 
           <!-- Búsqueda -->
@@ -337,6 +343,13 @@ const POS = {
           </div>
         </div>
       </div>
+
+      <!-- Mobile Cart FAB -->
+      <button class="mobile-cart-fab" id="mobile-cart-fab" onclick="POS.toggleMobileCart()">
+        🛒 <span class="fab-badge" id="fab-cart-count">${this.cart.length || 0}</span>
+      </button>
+      <!-- Cart overlay for mobile -->
+      <div class="cart-overlay" id="cart-overlay" onclick="POS.closeMobileCart()"></div>
 
       <!-- Modal de Pago (Redesigned) -->
       <div class="modal-overlay payment-modal" id="payment-modal">
@@ -815,6 +828,29 @@ const POS = {
   },
 
   /**
+   * Toggle mobile cart panel
+   */
+  toggleMobileCart() {
+    const ticketPanel = document.querySelector('.pos-ticket-panel');
+    const overlay = document.getElementById('cart-overlay');
+    if (!ticketPanel) return;
+    const isOpen = ticketPanel.classList.toggle('mobile-open');
+    if (overlay) overlay.classList.toggle('active', isOpen);
+    document.body.style.overflow = isOpen ? 'hidden' : '';
+  },
+
+  /**
+   * Close mobile cart panel
+   */
+  closeMobileCart() {
+    const ticketPanel = document.querySelector('.pos-ticket-panel');
+    const overlay = document.getElementById('cart-overlay');
+    if (ticketPanel) ticketPanel.classList.remove('mobile-open');
+    if (overlay) overlay.classList.remove('active');
+    document.body.style.overflow = '';
+  },
+
+  /**
    * Limpia el carrito
    */
   clearCart() {
@@ -865,6 +901,14 @@ const POS = {
       if (subEl) subEl.textContent = `$${grandTotal.toFixed(2)}`;
     }
     if (closeTransferBtn) closeTransferBtn.disabled = this.cart.length > 0;
+
+    // Update mobile FAB badge
+    const fabBadge = document.getElementById('fab-cart-count');
+    if (fabBadge) {
+      const totalItems = this.cart.reduce((sum, item) => sum + item.quantity, 0);
+      fabBadge.textContent = totalItems;
+      fabBadge.style.display = totalItems > 0 ? '' : 'none';
+    }
   },
 
   /**
@@ -878,8 +922,71 @@ const POS = {
       btn.classList.toggle('active', categoryId === null ? btnCat === 'all' : btnCat === String(categoryId));
     });
 
+    // Scroll la categoría activa al centro visible
+    const activeBtn = document.querySelector('.pos-category-btn.active');
+    if (activeBtn) {
+      activeBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    }
+
     const grid = document.getElementById('pos-products-grid');
     if (grid) grid.innerHTML = this.renderProducts(this.getFilteredProducts());
+  },
+
+  /**
+   * Scroll horizontal de categorías con flechas
+   */
+  scrollCategories(direction) {
+    const container = document.getElementById('pos-categories');
+    if (!container) return;
+    const scrollAmount = 200;
+    container.scrollBy({ left: direction * scrollAmount, behavior: 'smooth' });
+  },
+
+  /**
+   * Inicializa drag-to-scroll y flechas de las categorías
+   */
+  initCategoryScroll() {
+    const container = document.getElementById('pos-categories');
+    if (!container) return;
+
+    // Drag-to-scroll
+    let isDown = false, startX, scrollLeft;
+    container.addEventListener('mousedown', (e) => {
+      if (e.target.closest('.pos-category-btn')) return; // no drag desde botones
+      isDown = true;
+      container.classList.add('grabbing');
+      startX = e.pageX - container.offsetLeft;
+      scrollLeft = container.scrollLeft;
+    });
+    container.addEventListener('mouseleave', () => { isDown = false; container.classList.remove('grabbing'); });
+    container.addEventListener('mouseup', () => { isDown = false; container.classList.remove('grabbing'); });
+    container.addEventListener('mousemove', (e) => {
+      if (!isDown) return;
+      e.preventDefault();
+      const x = e.pageX - container.offsetLeft;
+      container.scrollLeft = scrollLeft - (x - startX) * 1.5;
+    });
+
+    // Mouse wheel → horizontal scroll
+    container.addEventListener('wheel', (e) => {
+      if (Math.abs(e.deltaY) > 0) {
+        e.preventDefault();
+        container.scrollBy({ left: e.deltaY * 2, behavior: 'smooth' });
+      }
+    }, { passive: false });
+
+    // Actualizar visibilidad de flechas
+    const updateArrows = () => {
+      const left = document.getElementById('cat-arrow-left');
+      const right = document.getElementById('cat-arrow-right');
+      if (!left || !right) return;
+      left.classList.toggle('visible', container.scrollLeft > 5);
+      right.classList.toggle('visible', container.scrollLeft < container.scrollWidth - container.clientWidth - 5);
+    };
+    container.addEventListener('scroll', updateArrows);
+    // Inicial check después del render
+    setTimeout(updateArrows, 100);
+    window.addEventListener('resize', updateArrows);
   },
 
   /**

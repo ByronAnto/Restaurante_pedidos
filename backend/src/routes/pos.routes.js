@@ -9,6 +9,8 @@ router.get('/sales', (req, res, next) => posController.getSales(req, res, next))
 router.get('/sales/summary', (req, res, next) => posController.getDailySummary(req, res, next));
 router.get('/sales/:id', (req, res, next) => posController.getSaleById(req, res, next));
 router.patch('/sales/:id/cancel', (req, res, next) => posController.cancelSale(req, res, next));
+router.post('/sales/:id/void', (req, res, next) => posController.voidSale(req, res, next));
+router.post('/verify-admin', (req, res, next) => posController.verifyAdmin(req, res, next));
 
 // Full Service Mode - Open Orders
 router.get('/open-orders', (req, res, next) => posController.getOpenOrders(req, res, next));

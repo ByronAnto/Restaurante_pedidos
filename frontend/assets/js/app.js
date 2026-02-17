@@ -31,8 +31,13 @@ const App = {
         <!-- Sidebar -->
         <aside class="sidebar" id="sidebar">
           <div class="sidebar-brand">
+            <button class="sidebar-toggle" id="sidebar-toggle" onclick="App.toggleSidebar()" title="Menú">
+              <span class="toggle-bar"></span>
+              <span class="toggle-bar"></span>
+              <span class="toggle-bar"></span>
+            </button>
             <div class="sidebar-brand-icon">🍽️</div>
-            <div>
+            <div class="sidebar-brand-info">
               <div class="sidebar-brand-text">RestaurantePOS</div>
               <div class="sidebar-brand-sub">Sistema de Gestión</div>
             </div>
@@ -42,11 +47,15 @@ const App = {
             <div class="nav-section">
               <div class="nav-section-title">Principal</div>
               ${user.role !== 'kitchen' ? `
-              <div class="nav-item ${user.role !== 'kitchen' ? 'active' : ''}" data-page="pos" onclick="App.navigate('pos')">
+              <div class="nav-item ${user.role !== 'kitchen' ? 'active' : ''}" data-page="pos" data-tooltip="Punto de Venta" onclick="App.navigate('pos')">
                 <span class="nav-item-icon">🛒</span>
                 <span class="nav-item-text">Punto de Venta</span>
               </div>` : ''}
-              <div class="nav-item ${user.role === 'kitchen' ? 'active' : ''}" data-page="kitchen" onclick="App.navigate('kitchen')">
+              <div class="nav-item" data-page="orders" data-tooltip="Pedidos" onclick="App.navigate('orders')">
+                <span class="nav-item-icon">📝</span>
+                <span class="nav-item-text">Pedidos</span>
+              </div>
+              <div class="nav-item ${user.role === 'kitchen' ? 'active' : ''}" data-page="kitchen" data-tooltip="Comandera" onclick="App.navigate('kitchen')">
                 <span class="nav-item-icon">👨‍🍳</span>
                 <span class="nav-item-text">Comandera</span>
                 <span class="nav-item-badge" id="kitchen-badge" style="display:none">0</span>
@@ -56,27 +65,27 @@ const App = {
             ${user.role === 'admin' ? `
             <div class="nav-section">
               <div class="nav-section-title">Gestión</div>
-              <div class="nav-item" data-page="products" onclick="App.navigate('products')">
+              <div class="nav-item" data-page="products" data-tooltip="Productos" onclick="App.navigate('products')">
                 <span class="nav-item-icon">📦</span>
                 <span class="nav-item-text">Productos</span>
               </div>
-              <div class="nav-item" data-page="inventory" onclick="App.navigate('inventory')">
+              <div class="nav-item" data-page="inventory" data-tooltip="Inventario" onclick="App.navigate('inventory')">
                 <span class="nav-item-icon">🏪</span>
                 <span class="nav-item-text">Inventario</span>
               </div>
-              <div class="nav-item" data-page="recipes" onclick="App.navigate('recipes')">
+              <div class="nav-item" data-page="recipes" data-tooltip="Recetas" onclick="App.navigate('recipes')">
                 <span class="nav-item-icon">📋</span>
                 <span class="nav-item-text">Recetas</span>
               </div>
-              <div class="nav-item" data-page="investments" onclick="App.navigate('investments')">
+              <div class="nav-item" data-page="investments" data-tooltip="Inversiones" onclick="App.navigate('investments')">
                 <span class="nav-item-icon">💰</span>
                 <span class="nav-item-text">Inversiones</span>
               </div>
-              <div class="nav-item" data-page="payroll" onclick="App.navigate('payroll')">
+              <div class="nav-item" data-page="payroll" data-tooltip="Nómina" onclick="App.navigate('payroll')">
                 <span class="nav-item-icon">👥</span>
                 <span class="nav-item-text">Nómina</span>
               </div>
-              <div class="nav-item" data-page="reports" onclick="App.navigate('reports')">
+              <div class="nav-item" data-page="reports" data-tooltip="Reportes" onclick="App.navigate('reports')">
                 <span class="nav-item-icon">📊</span>
                 <span class="nav-item-text">Reportes</span>
               </div>
@@ -84,11 +93,11 @@ const App = {
 
             <div class="nav-section">
               <div class="nav-section-title">Sistema</div>
-              <div class="nav-item" data-page="users" onclick="App.navigate('users')">
+              <div class="nav-item" data-page="users" data-tooltip="Usuarios" onclick="App.navigate('users')">
                 <span class="nav-item-icon">🔐</span>
                 <span class="nav-item-text">Usuarios</span>
               </div>
-              <div class="nav-item" data-page="config" onclick="App.navigate('config')">
+              <div class="nav-item" data-page="config" data-tooltip="Configuración" onclick="App.navigate('config')">
                 <span class="nav-item-icon">⚙️</span>
                 <span class="nav-item-text">Configuración</span>
               </div>
@@ -107,12 +116,18 @@ const App = {
           </div>
         </aside>
 
+        <!-- Mobile overlay for sidebar -->
+        <div class="sidebar-overlay" id="sidebar-overlay" onclick="App.closeMobileMenu()"></div>
+
         <!-- Main -->
         <main class="main-content">
           <header class="main-header">
-            <div>
-              <div class="header-title" id="header-title">Punto de Venta</div>
-              <div class="header-subtitle" id="header-subtitle">Crea y gestiona tus ventas</div>
+            <div style="display:flex;align-items:center;gap:var(--space-sm)">
+              <button class="mobile-menu-btn" id="mobile-menu-btn" onclick="App.toggleMobileMenu()">☰</button>
+              <div>
+                <div class="header-title" id="header-title">Punto de Venta</div>
+                <div class="header-subtitle" id="header-subtitle">Crea y gestiona tus ventas</div>
+              </div>
             </div>
             <div class="header-actions">
               <div class="header-datetime">
@@ -126,6 +141,9 @@ const App = {
         </main>
       </div>
     `;
+
+    // Restaurar estado del sidebar
+    this.restoreSidebarState();
 
     // Iniciar reloj
     this.updateClock();
@@ -155,6 +173,9 @@ const App = {
 
     this.currentPage = page;
 
+    // Cerrar sidebar en mobile
+    this.closeMobileMenu();
+
     // Actualizar sidebar
     document.querySelectorAll('.nav-item').forEach((item) => {
       item.classList.toggle('active', item.dataset.page === page);
@@ -163,6 +184,7 @@ const App = {
     // Actualizar header
     const titles = {
       pos: ['Punto de Venta', 'Crea y gestiona tus ventas'],
+      orders: ['Pedidos', 'Historial de pedidos abiertos, cerrados y anulados'],
       kitchen: ['Comandera Digital', 'Gestión de pedidos en cocina'],
       products: ['Productos', 'Gestiona tu catálogo y precios'],
       inventory: ['Inventario', 'Control de insumos y costos'],
@@ -185,6 +207,7 @@ const App = {
     try {
       switch (page) {
         case 'pos': await POS.init(container); break;
+        case 'orders': await Orders.init(container); break;
         case 'kitchen': await Kitchen.init(container); break;
         case 'products': await Products.init(container); break;
         case 'inventory': await Inventory.init(container); break;
@@ -199,6 +222,57 @@ const App = {
     } catch (err) {
       container.innerHTML = `<div class="page-content"><div class="empty-state"><div class="empty-state-icon">❌</div><div class="empty-state-text">Error cargando la página</div><p class="text-muted">${err.message}</p></div></div>`;
     }
+  },
+
+  /**
+   * Toggle sidebar colapsado/expandido
+   */
+  toggleSidebar() {
+    // En mobile, usar mobile menu en su lugar
+    if (window.innerWidth <= 768) {
+      this.toggleMobileMenu();
+      return;
+    }
+    const sidebar = document.getElementById('sidebar');
+    if (!sidebar) return;
+    const collapsed = sidebar.classList.toggle('collapsed');
+    localStorage.setItem('sidebar_collapsed', collapsed ? '1' : '0');
+  },
+
+  /**
+   * Restaurar estado guardado del sidebar
+   */
+  restoreSidebarState() {
+    // No restaurar en mobile
+    if (window.innerWidth <= 768) return;
+    const saved = localStorage.getItem('sidebar_collapsed');
+    const sidebar = document.getElementById('sidebar');
+    if (saved === '1' && sidebar) {
+      sidebar.classList.add('collapsed');
+    }
+  },
+
+  /**
+   * Toggle mobile menu (sidebar overlay)
+   */
+  toggleMobileMenu() {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    if (!sidebar) return;
+    const isOpen = sidebar.classList.toggle('mobile-open');
+    if (overlay) overlay.classList.toggle('active', isOpen);
+    document.body.style.overflow = isOpen ? 'hidden' : '';
+  },
+
+  /**
+   * Cierra el mobile menu
+   */
+  closeMobileMenu() {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    if (sidebar) sidebar.classList.remove('mobile-open');
+    if (overlay) overlay.classList.remove('active');
+    document.body.style.overflow = '';
   },
 
   /**

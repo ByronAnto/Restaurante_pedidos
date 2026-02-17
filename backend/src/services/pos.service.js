@@ -384,6 +384,74 @@ class PosService {
     }
 
     /**
+     * Anula una venta completada (void)
+     * Solo admin puede anular. La venta queda registrada pero no suma a ventas.
+     */
+    async voidSale(saleId, { adminUserId, reason }) {
+        const client = await getClient();
+        try {
+            await client.query('BEGIN');
+
+            const saleCheck = await client.query('SELECT * FROM sales WHERE id = $1', [saleId]);
+            if (saleCheck.rows.length === 0) {
+                throw { statusCode: 404, message: 'Venta no encontrada' };
+            }
+
+            const sale = saleCheck.rows[0];
+            if (sale.status === 'voided') {
+                throw { statusCode: 400, message: 'Esta venta ya fue anulada' };
+            }
+            if (sale.status === 'pending') {
+                throw { statusCode: 400, message: 'No se puede anular un pedido pendiente. Cancélelo primero.' };
+            }
+
+            // Marcar como anulada
+            await client.query(
+                `UPDATE sales SET status = 'voided', voided_at = CURRENT_TIMESTAMP, voided_by = $1, void_reason = $2 WHERE id = $3`,
+                [adminUserId, reason || 'Sin motivo especificado', saleId]
+            );
+
+            // Devolver stock si aplica
+            const items = await client.query('SELECT * FROM sale_items WHERE sale_id = $1', [saleId]);
+            for (const item of items.rows) {
+                const prod = await client.query('SELECT track_stock FROM products WHERE id = $1', [item.product_id]);
+                if (prod.rows[0]?.track_stock) {
+                    await client.query(
+                        'UPDATE products SET stock_quantity = stock_quantity + $1 WHERE id = $2',
+                        [item.quantity, item.product_id]
+                    );
+                }
+            }
+
+            await client.query('COMMIT');
+
+            return await this.getSaleById(saleId);
+        } catch (err) {
+            await client.query('ROLLBACK');
+            throw err;
+        } finally {
+            client.release();
+        }
+    }
+
+    /**
+     * Verifica credenciales de admin (para anulación)
+     */
+    async verifyAdminPassword(username, password) {
+        const bcrypt = require('bcryptjs');
+        const result = await query('SELECT * FROM users WHERE username = $1 AND role = $2 AND active = true', [username, 'admin']);
+        if (result.rows.length === 0) {
+            throw { statusCode: 401, message: 'Usuario admin no encontrado' };
+        }
+        const user = result.rows[0];
+        const valid = await bcrypt.compare(password, user.password_hash);
+        if (!valid) {
+            throw { statusCode: 401, message: 'Contraseña incorrecta' };
+        }
+        return { id: user.id, username: user.username, fullName: user.full_name };
+    }
+
+    /**
      * Resumen de ventas del día
      */
     async getDailySummary(date) {
@@ -396,6 +464,8 @@ class PosService {
         COALESCE(SUM(CASE WHEN status = 'completed' AND payment_method = 'cash' THEN total ELSE 0 END), 0) as cash_total,
         COALESCE(SUM(CASE WHEN status = 'completed' AND payment_method = 'transfer' THEN total ELSE 0 END), 0) as transfer_total,
         COALESCE(SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END), 0) as cancelled_count,
+        COALESCE(SUM(CASE WHEN status = 'voided' THEN 1 ELSE 0 END), 0) as voided_count,
+        COALESCE(SUM(CASE WHEN status = 'voided' THEN total ELSE 0 END), 0) as voided_total,
         COALESCE(SUM(CASE WHEN status = 'completed' THEN tax_total ELSE 0 END), 0) as total_taxes,
         COALESCE(SUM(CASE WHEN status = 'completed' AND order_type = 'dine_in' THEN total ELSE 0 END), 0) as dine_in_total,
         COALESCE(SUM(CASE WHEN status = 'completed' AND order_type = 'takeaway' THEN total ELSE 0 END), 0) as takeaway_total,

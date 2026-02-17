@@ -104,6 +104,54 @@ class PosController {
         }
     }
 
+    /**
+     * Anula una venta completada (requiere clave admin)
+     */
+    async voidSale(req, res, next) {
+        try {
+            const { adminUsername, adminPassword, reason } = req.body;
+
+            if (!adminUsername || !adminPassword) {
+                return error(res, 'Se requiere usuario y contraseña de administrador', 400);
+            }
+
+            // Verificar credenciales de admin
+            const admin = await posService.verifyAdminPassword(adminUsername, adminPassword);
+
+            // Anular la venta
+            const sale = await posService.voidSale(req.params.id, {
+                adminUserId: admin.id,
+                reason,
+            });
+
+            return success(res, sale, `Venta anulada por ${admin.fullName}`);
+        } catch (err) {
+            if (err.statusCode) {
+                return error(res, err.message, err.statusCode);
+            }
+            next(err);
+        }
+    }
+
+    /**
+     * Verifica credenciales de administrador
+     */
+    async verifyAdmin(req, res, next) {
+        try {
+            const { username, password } = req.body;
+            if (!username || !password) {
+                return error(res, 'Se requiere usuario y contraseña', 400);
+            }
+            const admin = await posService.verifyAdminPassword(username, password);
+            return success(res, admin, 'Autenticación exitosa');
+        } catch (err) {
+            if (err.statusCode) {
+                return error(res, err.message, err.statusCode);
+            }
+            next(err);
+        }
+    }
+
     async getDailySummary(req, res, next) {
         try {
             const summary = await posService.getDailySummary(req.query.date);
