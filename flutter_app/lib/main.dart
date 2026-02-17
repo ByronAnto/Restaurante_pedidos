@@ -14,6 +14,7 @@ import 'features/kitchen/providers/kitchen_provider.dart';
 import 'features/auth/screens/server_setup_screen.dart';
 import 'features/auth/screens/login_screen.dart';
 import 'features/pos/screens/pos_screen.dart';
+import 'features/pos/screens/sales_history_screen.dart';
 import 'features/kitchen/screens/kitchen_screen.dart';
 import 'features/products/screens/products_screen.dart';
 import 'features/inventory/screens/inventory_screen.dart';
@@ -69,6 +70,7 @@ class RestaurantePosApp extends StatelessWidget {
               '/server-setup': (_) => const ServerSetupScreen(),
               '/login': (_) => const LoginScreen(),
               '/pos': (_) => const PosScreen(),
+              '/sales-history': (_) => const SalesHistoryScreen(),
               '/kitchen': (_) => const KitchenScreen(),
               '/products': (_) => const ProductsScreen(),
               '/inventory': (_) => const InventoryScreen(),

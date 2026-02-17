@@ -1903,31 +1903,444 @@
     font-style: italic;
 }
 
-/* ─── Table Map Responsive ─── */
+/* ═══════════════════════════════════════════════════════
+   FLOOR PLAN - Plano Visual del Restaurante
+   ═══════════════════════════════════════════════════════ */
+
+/* ─── View Container ─── */
+.floor-plan-view {
+    padding: var(--space-lg) var(--space-xl);
+    max-width: 1300px;
+    margin: 0 auto;
+    height: calc(100vh - var(--header-height));
+    overflow-y: auto;
+}
+
+/* ─── Header ─── */
+.fp-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-lg);
+    padding: var(--space-lg);
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-color);
+}
+
+.fp-header-left {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.fp-title {
+    margin: 0;
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: var(--text-primary);
+}
+
+.fp-legend {
+    display: flex;
+    gap: var(--space-md);
+    flex-wrap: wrap;
+}
+
+.fp-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    padding: 4px 12px;
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+    font-weight: 500;
+}
+
+.fp-legend-item.total {
+    border: 1px solid var(--border-color);
+}
+
+.fp-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.fp-legend-item.free .fp-dot {
+    background: #10b981;
+    box-shadow: 0 0 6px rgba(16, 185, 129, 0.5);
+}
+
+.fp-legend-item.occupied .fp-dot {
+    background: #f59e0b;
+    box-shadow: 0 0 6px rgba(245, 158, 11, 0.5);
+    animation: pulse-dot 2s ease-in-out infinite;
+}
+
+/* ─── Empty state ─── */
+.fp-empty-state {
+    text-align: center;
+    padding: 80px 20px;
+    color: var(--text-muted);
+}
+
+.fp-empty-state .fp-empty-icon {
+    font-size: 4rem;
+    margin-bottom: 16px;
+}
+
+.fp-empty-state h3 {
+    margin: 0 0 8px;
+    color: var(--text-primary);
+}
+
+.fp-empty-state p { margin: 0; }
+
+/* ─── Blueprint Container (CSS Grid from zones API) ─── */
+.fp-blueprint {
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    border: 3px solid rgba(255, 255, 255, 0.08);
+    background:
+        repeating-linear-gradient(0deg, rgba(255,255,255,0.015) 0px, rgba(255,255,255,0.015) 1px, transparent 1px, transparent 60px),
+        repeating-linear-gradient(90deg, rgba(255,255,255,0.015) 0px, rgba(255,255,255,0.015) 1px, transparent 1px, transparent 60px),
+        var(--bg-primary);
+    box-shadow:
+        0 4px 32px rgba(0, 0, 0, 0.25),
+        inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    padding: 3px;
+}
+
+/* ─── Zone Base (dynamic color via --zone-color) ─── */
+.fp-zone {
+    padding: 16px;
+    border-radius: var(--radius-md);
+    border: 2px solid color-mix(in srgb, var(--zone-color, #6b7280) 30%, transparent);
+    background: color-mix(in srgb, var(--zone-color, #6b7280) 6%, transparent);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transition: background 0.2s;
+}
+
+.fp-zone-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    flex-shrink: 0;
+}
+
+.fp-zone-icon { font-size: 1.1rem; }
+
+.fp-zone-name {
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: var(--text-primary);
+}
+
+.fp-zone-count {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    background: rgba(255, 255, 255, 0.06);
+    padding: 2px 10px;
+    border-radius: var(--radius-full);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* ─── Zone Type Overrides ─── */
+.fp-zone-kitchen {
+    align-items: center;
+    justify-content: center;
+}
+
+.fp-zone-wall {
+    background: color-mix(in srgb, var(--zone-color, #525252) 30%, transparent);
+    border: none;
+    align-items: center;
+    justify-content: center;
+}
+
+.fp-zone-entrance {
+    border-style: dashed;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.fp-zone-storage,
+.fp-zone-bathroom {
+    border-style: dashed;
+}
+
+/* ─── Kitchen Decoration ─── */
+.fp-kitchen-deco {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    padding: 14px;
+    background: rgba(0, 0, 0, 0.12);
+    border-radius: var(--radius-md);
+    border: 1px dashed rgba(251, 146, 60, 0.15);
+}
+
+.fp-kitchen-deco span {
+    font-size: 1.5rem;
+    opacity: 0.5;
+    animation: kitchenFlicker 3s ease-in-out infinite;
+}
+.fp-kitchen-deco span:nth-child(2) { animation-delay: 0.6s; }
+.fp-kitchen-deco span:nth-child(3) { animation-delay: 1.2s; }
+
+@keyframes kitchenFlicker {
+    0%, 100% { opacity: 0.4; transform: scale(1); }
+    50% { opacity: 0.75; transform: scale(1.08); }
+}
+
+/* ─── Entrance Decoration ─── */
+.fp-entrance-deco {
+    font-size: 2rem;
+    opacity: 0.45;
+}
+
+/* ─── Tables Grid ─── */
+.fp-tables {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    align-items: flex-start;
+    flex: 1;
+    align-content: flex-start;
+}
+
+/* ═══════════════════════════════════════════════════════
+   TABLE TOP-DOWN VIEW (Sillas + Superficie)
+   ═══════════════════════════════════════════════════════ */
+
+.fp-table {
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+}
+
+.fp-table:hover {
+    transform: translateY(-6px) scale(1.06);
+    filter: brightness(1.1);
+}
+
+.fp-table:active {
+    transform: translateY(-2px) scale(0.97);
+}
+
+/* ─── Table Wrap ─── */
+.fp-table-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+/* ─── Table Surface (the actual table) ─── */
+.fp-surface {
+    width: 110px;
+    min-height: 72px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+    padding: 10px 8px;
+    border-radius: 10px;
+    text-align: center;
+    transition: all 0.3s ease;
+}
+
+.fp-table.free .fp-surface {
+    background: rgba(16, 185, 129, 0.1);
+    border: 2.5px solid rgba(16, 185, 129, 0.35);
+    box-shadow: 0 2px 12px rgba(16, 185, 129, 0.08);
+}
+
+.fp-table.free:hover .fp-surface {
+    border-color: rgba(16, 185, 129, 0.6);
+    box-shadow: 0 4px 24px rgba(16, 185, 129, 0.2);
+}
+
+.fp-table.occupied .fp-surface {
+    background: rgba(245, 158, 11, 0.1);
+    border: 2.5px solid rgba(245, 158, 11, 0.35);
+    box-shadow: 0 2px 12px rgba(245, 158, 11, 0.08);
+    animation: tableGlow 3s ease-in-out infinite;
+}
+
+.fp-table.occupied:hover .fp-surface {
+    border-color: rgba(245, 158, 11, 0.6);
+    box-shadow: 0 4px 24px rgba(245, 158, 11, 0.25);
+}
+
+@keyframes tableGlow {
+    0%, 100% { box-shadow: 0 2px 12px rgba(245, 158, 11, 0.08); }
+    50% { box-shadow: 0 2px 20px rgba(245, 158, 11, 0.2); }
+}
+
+/* Round surface */
+.fp-surface.round {
+    border-radius: 50%;
+    width: 90px;
+    height: 90px;
+    min-height: auto;
+    padding: 6px;
+}
+
+/* Rectangle shape */
+.fp-table.shape-rect .fp-surface {
+    width: 140px;
+    min-height: 60px;
+}
+
+.fp-surface strong {
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    line-height: 1.2;
+}
+
+.fp-surface small {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+}
+
+.fp-total {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 800;
+    color: #10b981;
+    margin-top: 2px;
+    padding-top: 3px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* ─── Status Badge ─── */
+.fp-table-badge {
+    font-size: 0.55rem;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    padding: 2px 10px;
+    border-radius: 10px;
+}
+
+.fp-table-badge.free {
+    background: rgba(16, 185, 129, 0.12);
+    color: #10b981;
+}
+
+.fp-table-badge.occupied {
+    background: rgba(245, 158, 11, 0.12);
+    color: #f59e0b;
+}
+
+/* ─── Chair Elements ─── */
+
+/* Square / Rect: top & bottom rows */
+.fp-chairs-row {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+}
+
+.fp-chairs-row .fp-chair {
+    width: 18px;
+    height: 8px;
+    border-radius: 4px 4px 0 0;
+    background: rgba(75, 85, 99, 0.35);
+    border: 2px solid rgba(107, 114, 128, 0.4);
+    border-bottom: none;
+    transition: background 0.2s ease;
+}
+
+/* Bottom row: flip chair shape */
+.fp-chairs-row:last-of-type .fp-chair {
+    border-radius: 0 0 4px 4px;
+    border: 2px solid rgba(107, 114, 128, 0.4);
+    border-top: none;
+}
+
+/* Occupied chairs lighten */
+.fp-table.occupied .fp-chairs-row .fp-chair {
+    background: rgba(245, 158, 11, 0.2);
+    border-color: rgba(245, 158, 11, 0.3);
+}
+
+.fp-table.free .fp-chairs-row .fp-chair {
+    background: rgba(16, 185, 129, 0.15);
+    border-color: rgba(16, 185, 129, 0.25);
+}
+
+/* Spacing between chairs and surface */
+.fp-chairs-row:first-child { margin-bottom: 4px; }
+.fp-chairs-row:last-of-type { margin-top: 4px; }
+
+/* Round: circular ring */
+.fp-round-wrap {
+    position: relative;
+    width: 120px;
+    height: 120px;
+}
+
+.fp-chairs-ring {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+.fp-chairs-ring .fp-chair {
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    margin: -7px;
+    border-radius: 50%;
+    background: rgba(75, 85, 99, 0.35);
+    border: 2px solid rgba(107, 114, 128, 0.45);
+    transition: background 0.2s ease;
+}
+
+.fp-table.occupied .fp-chairs-ring .fp-chair {
+    background: rgba(245, 158, 11, 0.2);
+    border-color: rgba(245, 158, 11, 0.3);
+}
+
+.fp-table.free .fp-chairs-ring .fp-chair {
+    background: rgba(16, 185, 129, 0.15);
+    border-color: rgba(16, 185, 129, 0.25);
+}
+
+.fp-round-wrap .fp-surface {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+/* ─── Floor Plan Responsive ─── */
 @media (max-width: 768px) {
-    .pos-table-map-view {
+    .floor-plan-view {
         padding: var(--space-md);
     }
 
-    .pos-map-header {
+    .fp-header {
         flex-direction: column;
         gap: var(--space-md);
         padding: var(--space-md);
     }
 
-    .pos-map-title {
-        font-size: 1.2rem;
-    }
+    .fp-title { font-size: 1.15rem; }
 
-    .pos-map-stats {
-        flex-wrap: wrap;
-        gap: var(--space-sm);
-    }
-
-    .pos-map-stat {
-        padding: 6px 12px;
-        font-size: 0.8rem;
-    }
+    .fp-legend { gap: var(--space-sm); }
 
     .takeaway-btn {
         padding: 12px 20px;
@@ -1935,35 +2348,47 @@
         justify-content: center;
     }
 
-    .table-map-grid {
-        grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-        gap: var(--space-sm);
+    .fp-blueprint {
+        grid-template-columns: repeat(6, 1fr) !important;
+        grid-template-rows: auto !important;
     }
 
-    .table-card-inner {
-        min-height: 110px;
-        padding: var(--space-md) var(--space-sm);
+    .fp-zone {
+        grid-column: 1 / -1 !important;
+        grid-row: auto !important;
     }
 
-    .table-number {
-        font-size: 1.1rem;
+    .fp-surface {
+        width: 95px;
+        min-height: 64px;
+        padding: 8px 6px;
     }
 
-    .table-order-total {
-        font-size: 0.9rem;
+    .fp-surface strong { font-size: 0.82rem; }
+
+    .fp-surface.round {
+        width: 80px;
+        height: 80px;
     }
+
+    .fp-round-wrap {
+        width: 105px;
+        height: 105px;
+    }
+
+    .fp-tables { gap: 12px; }
 }
 
 @media (max-width: 480px) {
-    .table-map-grid {
-        grid-template-columns: repeat(2, 1fr);
+    .fp-tables {
+        justify-content: center;
     }
 
-    .pos-map-header {
+    .fp-header {
         text-align: center;
     }
 
-    .pos-map-stats {
+    .fp-legend {
         justify-content: center;
     }
 }

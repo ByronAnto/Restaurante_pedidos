@@ -33,6 +33,7 @@ const reportsRoutes = require('./routes/reports.routes');
 const inventoryRoutes = require('./routes/inventory.routes');
 const recipesRoutes = require('./routes/recipes.routes');
 const tablesRoutes = require('./routes/tables.routes');
+const zonesRoutes = require('./routes/zones.routes');
 
 // ─── Inicializar Express ───
 const app = express();
@@ -81,6 +82,7 @@ app.use('/api/reports', reportsRoutes);
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/recipes', recipesRoutes);
 app.use('/api/tables', tablesRoutes);
+app.use('/api/zones', zonesRoutes);
 
 // ─── Health check ───
 app.get('/api/health', (req, res) => {
@@ -199,6 +201,16 @@ const autoBootstrap = async () => {
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )`);
 
+            // Tabla de zonas del restaurante (plano)
+            await client.query(`CREATE TABLE IF NOT EXISTS zones (
+                id SERIAL PRIMARY KEY, name VARCHAR(100) NOT NULL,
+                zone_type VARCHAR(30) DEFAULT 'dining', icon VARCHAR(10) DEFAULT '🍽️',
+                grid_col INT DEFAULT 0, grid_row INT DEFAULT 0,
+                grid_w INT DEFAULT 2, grid_h INT DEFAULT 2,
+                color VARCHAR(30) DEFAULT '#10b981', display_order INT DEFAULT 0,
+                active BOOLEAN DEFAULT true, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )`);
+
             // Nuevas tablas: Inventario y Recetas
             await client.query(`CREATE TABLE IF NOT EXISTS inventory_items (
                 id SERIAL PRIMARY KEY, name VARCHAR(150) NOT NULL, unit VARCHAR(20) NOT NULL DEFAULT 'kg',
@@ -258,6 +270,27 @@ const autoBootstrap = async () => {
             await client.query(`ALTER TABLE payroll_entries ADD COLUMN IF NOT EXISTS payment_method VARCHAR(20) DEFAULT 'cash'`);
             await client.query(`ALTER TABLE payroll_entries ADD COLUMN IF NOT EXISTS payment_date DATE DEFAULT CURRENT_DATE`);
             await client.query(`ALTER TABLE payroll_entries DROP CONSTRAINT IF EXISTS payroll_entries_employee_id_period_key`);
+
+            // Migración: zone_id en tables
+            await client.query(`ALTER TABLE tables ADD COLUMN IF NOT EXISTS zone_id INT`);
+
+            // Auto-migrar zonas desde texto existente
+            try {
+                const zoneTxt = await client.query("SELECT DISTINCT zone FROM tables WHERE zone IS NOT NULL AND zone != ''");
+                for (const row of zoneTxt.rows) {
+                    const exists = await client.query('SELECT id FROM zones WHERE name = $1', [row.zone]);
+                    if (exists.rows.length === 0) {
+                        const lc = row.zone.toLowerCase();
+                        let type = 'dining', icon = '🍽️', color = '#10b981';
+                        if (lc.includes('cocina')) { type = 'kitchen'; icon = '👨‍🍳'; color = '#f97316'; }
+                        else if (lc.includes('privad')) { type = 'private'; icon = '🔒'; color = '#8b5cf6'; }
+                        else if (lc.includes('calle') || lc.includes('terraz') || lc.includes('exterior')) { type = 'outdoor'; icon = '☀️'; color = '#06b6d4'; }
+                        else if (lc.includes('barra')) { type = 'bar'; icon = '🍺'; color = '#ec4899'; }
+                        await client.query('INSERT INTO zones (name, zone_type, icon, color) VALUES ($1,$2,$3,$4)', [row.zone, type, icon, color]);
+                    }
+                }
+                await client.query('UPDATE tables SET zone_id = z.id FROM zones z WHERE tables.zone = z.name AND tables.zone_id IS NULL');
+            } catch(migErr) { /* non-fatal */ }
 
             // Migraciones Full Service
             await client.query(`ALTER TABLE sales ADD COLUMN IF NOT EXISTS order_type VARCHAR(20) DEFAULT 'dine_in'`);

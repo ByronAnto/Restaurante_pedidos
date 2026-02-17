@@ -190,6 +190,24 @@ const createTables = async () => {
       );
     `);
 
+        // ─── Tabla: zones (Zonas del plano) ───
+        await client.query(`
+      CREATE TABLE IF NOT EXISTS zones (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        zone_type VARCHAR(30) DEFAULT 'dining',
+        icon VARCHAR(10) DEFAULT '🍽️',
+        grid_col INT DEFAULT 0,
+        grid_row INT DEFAULT 0,
+        grid_w INT DEFAULT 2,
+        grid_h INT DEFAULT 2,
+        color VARCHAR(30) DEFAULT '#10b981',
+        display_order INT DEFAULT 0,
+        active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
         // ─── Tabla: tables (Full Service Mode) ───
         await client.query(`
       CREATE TABLE IF NOT EXISTS tables (
@@ -200,6 +218,7 @@ const createTables = async () => {
         position_y INT DEFAULT 0,
         shape VARCHAR(20) DEFAULT 'square',
         zone VARCHAR(50) DEFAULT 'Salón',
+        zone_id INT REFERENCES zones(id),
         active BOOLEAN DEFAULT true,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
@@ -245,6 +264,35 @@ const createTables = async () => {
             ALTER TABLE kitchen_orders 
             ADD COLUMN IF NOT EXISTS table_name VARCHAR(50);
         `);
+
+        // ─── Migración: zone_id en tables ───
+        await client.query(`
+            ALTER TABLE tables 
+            ADD COLUMN IF NOT EXISTS zone_id INT REFERENCES zones(id);
+        `);
+
+        // ─── Auto-migrar: crear zonas desde texto existente ───
+        try {
+            const zoneTxt = await client.query("SELECT DISTINCT zone FROM tables WHERE zone IS NOT NULL AND zone != ''");
+            for (const row of zoneTxt.rows) {
+                const exists = await client.query('SELECT id FROM zones WHERE name = $1', [row.zone]);
+                if (exists.rows.length === 0) {
+                    const lc = row.zone.toLowerCase();
+                    let type = 'dining', icon = '🍽️', color = '#10b981';
+                    if (lc.includes('cocina')) { type = 'kitchen'; icon = '👨‍🍳'; color = '#f97316'; }
+                    else if (lc.includes('privad')) { type = 'private'; icon = '🔒'; color = '#8b5cf6'; }
+                    else if (lc.includes('calle') || lc.includes('terraz') || lc.includes('exterior')) { type = 'outdoor'; icon = '☀️'; color = '#06b6d4'; }
+                    else if (lc.includes('barra')) { type = 'bar'; icon = '🍺'; color = '#ec4899'; }
+                    await client.query(
+                        'INSERT INTO zones (name, zone_type, icon, color) VALUES ($1, $2, $3, $4)',
+                        [row.zone, type, icon, color]
+                    );
+                }
+            }
+            await client.query("UPDATE tables SET zone_id = z.id FROM zones z WHERE tables.zone = z.name AND tables.zone_id IS NULL");
+        } catch (migErr) {
+            logger.warn('Zone migration (non-fatal):', migErr.message);
+        }
 
         // ─── Índices para Full Service Mode (después de crear columnas) ───
         await client.query(`CREATE INDEX IF NOT EXISTS idx_sales_table ON sales(table_id);`);
@@ -345,19 +393,24 @@ const seedData = async () => {
       ('sale_number_counter', '0', 'general', 'Contador de número de venta')
     `);
 
+        // ─── Zonas de ejemplo ───
+        await client.query(`
+      INSERT INTO zones (name, zone_type, icon, grid_col, grid_row, grid_w, grid_h, color) VALUES
+      ('Calle', 'outdoor', '☀️', 0, 0, 12, 2, '#06b6d4'),
+      ('Cocina', 'kitchen', '👨‍🍳', 0, 2, 3, 3, '#f97316'),
+      ('Privado', 'private', '🔒', 0, 5, 3, 3, '#8b5cf6'),
+      ('Salón 1', 'dining', '🍽️', 3, 2, 9, 6, '#10b981')
+    `);
+
         // ─── Mesas de ejemplo (Full Service Mode) ───
         await client.query(`
-      INSERT INTO tables (name, capacity, position_x, position_y, shape, zone) VALUES
-      ('Mesa 1', 4, 0, 0, 'square', 'Salón'),
-      ('Mesa 2', 4, 1, 0, 'square', 'Salón'),
-      ('Mesa 3', 4, 2, 0, 'square', 'Salón'),
-      ('Mesa 4', 6, 0, 1, 'rect', 'Salón'),
-      ('Mesa 5', 6, 1, 1, 'rect', 'Salón'),
-      ('Mesa 6', 2, 2, 1, 'round', 'Salón'),
-      ('Barra 1', 2, 0, 2, 'round', 'Barra'),
-      ('Barra 2', 2, 1, 2, 'round', 'Barra'),
-      ('Terraza 1', 4, 0, 0, 'square', 'Terraza'),
-      ('Terraza 2', 4, 1, 0, 'square', 'Terraza')
+      INSERT INTO tables (name, capacity, shape, zone, zone_id) VALUES
+      ('Mesa 5', 4, 'square', 'Calle', (SELECT id FROM zones WHERE name='Calle')),
+      ('Mesa 6', 4, 'square', 'Calle', (SELECT id FROM zones WHERE name='Calle')),
+      ('Mesa 1', 6, 'round', 'Privado', (SELECT id FROM zones WHERE name='Privado')),
+      ('Mesa 2', 4, 'square', 'Salón 1', (SELECT id FROM zones WHERE name='Salón 1')),
+      ('Mesa 3', 4, 'square', 'Salón 1', (SELECT id FROM zones WHERE name='Salón 1')),
+      ('Mesa 4', 4, 'square', 'Salón 1', (SELECT id FROM zones WHERE name='Salón 1'))
     `);
 
         await client.query('COMMIT');

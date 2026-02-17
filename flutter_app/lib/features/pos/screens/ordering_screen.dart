@@ -4,6 +4,7 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/toast_notification.dart';
 import '../providers/pos_provider.dart';
 import 'payment_modal.dart';
+import 'product_modifiers_dialog.dart';
 import '../../../core/utils/parsers.dart';
 
 class OrderingScreen extends StatefulWidget {
@@ -205,8 +206,25 @@ class _OrderingScreenState extends State<OrderingScreen> {
         .where((c) => c['product_id'] == product['id'])
         .fold<int>(0, (sum, c) => sum + (toInt(c['quantity'], 0)));
 
+    // Check if product has modifier_groups (parsed as List)
+    final hasModifiers = (product['modifier_groups'] is List) && (product['modifier_groups'] as List).isNotEmpty;
+
     return GestureDetector(
-      onTap: () => pos.addToCart(product),
+      onTap: () {
+        if (hasModifiers) {
+           showDialog(
+            context: context,
+            builder: (_) => ProductModifiersDialog(
+              product: product,
+              onAddToCart: (modifiers, adjustment) {
+                pos.addToCartWithModifiers(product, modifiers, adjustment);
+              },
+            ),
+          );
+        } else {
+          pos.addToCart(product);
+        }
+      },
       child: Container(
         decoration: BoxDecoration(
           color: AppConstants.bgSecondary,

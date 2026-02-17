@@ -55,8 +55,10 @@ class AppDrawer extends StatelessWidget {
               padding: const EdgeInsets.symmetric(vertical: 8),
               children: [
                 _buildSectionTitle('Principal'),
-                if (role != 'kitchen')
+                if (role != 'kitchen') ...[
                   _buildNavItem(context, '🛒', 'Punto de Venta', 'pos'),
+                  _buildNavItem(context, '📜', 'Historial Ventas', 'sales-history'),
+                ],
                 _buildNavItem(context, '👨‍🍳', 'Comandera', 'kitchen'),
 
                 if (role == 'admin') ...[

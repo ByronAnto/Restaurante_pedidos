@@ -10,6 +10,7 @@ const POS = {
   products: [],
   categories: [],
   tables: [],
+  zones: [],
   selectedCategory: null,
   searchTerm: '',
   container: null, // Referencia al contenedor
@@ -28,6 +29,7 @@ const POS = {
     this.products = [];
     this.categories = [];
     this.tables = [];
+    this.zones = [];
     this.container = container; // Guardar referencia
     this.mode = 'table-map';
     this.orderType = null;
@@ -43,21 +45,24 @@ const POS = {
    */
   async loadData() {
     try {
-      const [productsRes, categoriesRes, tablesRes] = await Promise.all([
+      const [productsRes, categoriesRes, tablesRes, zonesRes] = await Promise.all([
         API.get('/products?available=true'),
         API.get('/products/categories'),
         API.get('/tables/map'),
+        API.get('/zones'),
       ]);
 
       this.products = Array.isArray(productsRes?.data) ? productsRes.data : [];
       this.categories = Array.isArray(categoriesRes?.data) ? categoriesRes.data : [];
       // El endpoint /tables/map devuelve { tables: [], zones: [], summary: {} }
       this.tables = Array.isArray(tablesRes?.data?.tables) ? tablesRes.data.tables : [];
+      this.zones = Array.isArray(zonesRes?.data) ? zonesRes.data : [];
       
       console.log('Datos cargados:', { 
         products: this.products.length, 
         categories: this.categories.length, 
-        tables: this.tables.length 
+        tables: this.tables.length,
+        zones: this.zones.length 
       });
     } catch (err) {
       Toast.error('Error cargando datos');
@@ -89,39 +94,31 @@ const POS = {
   },
 
   /**
-   * Renderiza el mapa de mesas
+   * Renderiza el plano visual del restaurante (Floor Plan)
+   * Layout dinámico basado en zonas configuradas por el usuario
    */
   renderTableMap(container) {
-    // Validar que tables sea un array
-    if (!Array.isArray(this.tables)) {
-      console.error('this.tables no es un array:', this.tables);
-      this.tables = [];
-    }
+    if (!Array.isArray(this.tables)) this.tables = [];
+    if (!Array.isArray(this.zones)) this.zones = [];
 
-    const zones = [...new Set(this.tables.map(t => t.zone))];
     const freeCount = this.tables.filter(t => !t.active_sale_id).length;
     const occupiedCount = this.tables.filter(t => t.active_sale_id).length;
 
+    // Mesas sin zona asignada
+    const unzonedTables = this.tables.filter(t =>
+      !t.zone_id && !this.zones.some(z => z.name === t.zone)
+    );
+
     container.innerHTML = `
-      <div class="pos-table-map-view">
-        <div class="pos-map-header">
-          <div class="pos-map-header-info">
-            <h2 class="pos-map-title">🍽️ Mapa de Mesas</h2>
-            <div class="pos-map-stats">
-              <div class="pos-map-stat free">
-                <span class="pos-map-stat-dot"></span>
-                <span class="pos-map-stat-num">${freeCount}</span>
-                <span class="pos-map-stat-label">Libres</span>
-              </div>
-              <div class="pos-map-stat occupied">
-                <span class="pos-map-stat-dot"></span>
-                <span class="pos-map-stat-num">${occupiedCount}</span>
-                <span class="pos-map-stat-label">Ocupadas</span>
-              </div>
-              <div class="pos-map-stat total-stat">
-                <span class="pos-map-stat-num">${this.tables.length}</span>
-                <span class="pos-map-stat-label">Total</span>
-              </div>
+      <div class="floor-plan-view">
+        <!-- ── Header ── -->
+        <div class="fp-header">
+          <div class="fp-header-left">
+            <h2 class="fp-title">📐 Plano del Restaurante</h2>
+            <div class="fp-legend">
+              <span class="fp-legend-item free"><span class="fp-dot"></span>${freeCount} Libres</span>
+              <span class="fp-legend-item occupied"><span class="fp-dot"></span>${occupiedCount} Ocupadas</span>
+              <span class="fp-legend-item total">${this.tables.length} Total</span>
             </div>
           </div>
           <button class="takeaway-btn" data-action="start-takeaway">
@@ -133,41 +130,114 @@ const POS = {
           </button>
         </div>
 
-        ${zones.length === 0 ? `
-          <div style="text-align:center;padding:80px 20px;color:var(--text-muted)">
-            <div style="font-size:4rem;margin-bottom:16px">🪑</div>
-            <h3 style="margin:0 0 8px;color:var(--text-primary)">No hay mesas configuradas</h3>
-            <p style="margin:0">Ve a Configuración → Mesas para crear tu mapa</p>
-          </div>
-        ` : zones.map(zone => `
-          <div class="table-zone">
-            <div class="table-zone-header">
-              <h3 class="table-zone-title">${zone}</h3>
-              <span class="table-zone-count">${this.tables.filter(t => t.zone === zone).length} mesas</span>
+        ${this.tables.length === 0 && this.zones.length === 0 ? `
+        <div class="fp-empty-state">
+          <div class="fp-empty-icon">🪑</div>
+          <h3>No hay mesas configuradas</h3>
+          <p>Ve a Configuración → Plano del Restaurante para crear tu mapa</p>
+        </div>
+        ` : `
+        <!-- ── Blueprint dinámico con CSS Grid ── -->
+        <div class="fp-blueprint"
+             style="display:grid;grid-template-columns:repeat(12,1fr);grid-template-rows:repeat(8,minmax(60px,1fr));gap:3px;">
+          ${this.zones.map(z => {
+            const zoneTables = this.tables.filter(t => t.zone_id === z.id || (!t.zone_id && t.zone === z.name));
+            const isDecor = z.zone_type === 'wall';
+            const isEntrance = z.zone_type === 'entrance';
+            const isKitchen = z.zone_type === 'kitchen';
+            const isStorage = z.zone_type === 'storage' || z.zone_type === 'bathroom';
+
+            return `
+            <div class="fp-zone fp-zone-${z.zone_type}"
+                 style="grid-column:${z.grid_col + 1}/span ${z.grid_w};grid-row:${z.grid_row + 1}/span ${z.grid_h};--zone-color:${z.color};">
+              <div class="fp-zone-label">
+                <span class="fp-zone-icon">${z.icon}</span>
+                <span class="fp-zone-name">${z.name}</span>
+                ${!isDecor && !isKitchen && !isEntrance && !isStorage ? `<span class="fp-zone-count">${zoneTables.length} mesas</span>` : ''}
+              </div>
+              ${isKitchen ? `
+              <div class="fp-kitchen-deco"><span>🔥</span><span>🍳</span><span>🥘</span></div>
+              ` : isEntrance ? `
+              <div class="fp-entrance-deco"><span>🚪</span></div>
+              ` : isDecor || isStorage ? '' : `
+              <div class="fp-tables">${this.renderFloorTables(zoneTables)}</div>
+              `}
+            </div>`;
+          }).join('')}
+          ${unzonedTables.length > 0 ? `
+          <div class="fp-zone fp-zone-dining" style="grid-column:1/-1;--zone-color:#6b7280;">
+            <div class="fp-zone-label">
+              <span class="fp-zone-icon">📋</span>
+              <span class="fp-zone-name">Sin zona</span>
+              <span class="fp-zone-count">${unzonedTables.length}</span>
             </div>
-            <div class="table-map-grid">
-              ${this.tables.filter(t => t.zone === zone).map(table => `
-                <div class="table-card ${table.active_sale_id ? 'occupied' : 'free'} shape-${table.shape}"
-                     data-action="select-table" data-table-id="${table.id}">
-                  <div class="table-card-inner">
-                    <div class="table-number">${table.name}</div>
-                    <div class="table-capacity">👥 ${table.capacity}</div>
-                    ${table.active_sale_id ? `
-                      <div class="table-order-info">
-                        <div class="table-order-number">${table.active_sale_number}</div>
-                        <div class="table-order-total">$${Number.parseFloat(table.active_total || 0).toFixed(2)}</div>
-                      </div>
-                    ` : ''}
-                    <div class="table-status-badge ${table.active_sale_id ? 'occupied' : 'free'}">${table.active_sale_id ? 'Ocupada' : 'Disponible'}</div>
-                  </div>
-                  ${table.active_sale_id ? '<div class="table-pulse"></div>' : ''}
-                </div>
-              `).join('')}
-            </div>
+            <div class="fp-tables">${this.renderFloorTables(unzonedTables)}</div>
           </div>
-        `).join('')}
+          ` : ''}
+        </div>
+        `}
       </div>
     `;
+  },
+
+  /**
+   * Renderiza las mesas de una zona con vista top-down
+   */
+  renderFloorTables(tables) {
+    if (!tables?.length) return '';
+    return tables.map(t => {
+      const occ = !!t.active_sale_id;
+      const cls = occ ? 'occupied' : 'free';
+      const shape = t.shape || 'square';
+      return `
+        <div class="fp-table ${cls} shape-${shape}"
+             data-action="select-table" data-table-id="${t.id}"
+             title="${t.name} · ${t.capacity} personas">
+          <div class="fp-table-wrap">
+            ${shape === 'round' ? this.renderRoundTable(t, occ) : this.renderSquareTable(t, occ)}
+          </div>
+          <div class="fp-table-badge ${cls}">${occ ? 'OCUPADA' : 'LIBRE'}</div>
+        </div>`;
+    }).join('');
+  },
+
+  /**
+   * Mesa cuadrada / rectangular (sillas arriba y abajo)
+   */
+  renderSquareTable(t, occ) {
+    const top = Math.ceil(t.capacity / 2);
+    const bot = Math.floor(t.capacity / 2);
+    const ch = '<div class="fp-chair"></div>';
+    return `
+      <div class="fp-chairs-row">${ch.repeat(top)}</div>
+      <div class="fp-surface">
+        <strong>${t.name}</strong>
+        <small>👥 ${t.capacity}</small>
+        ${occ ? `<span class="fp-total">$${Number.parseFloat(t.active_total || 0).toFixed(2)}</span>` : ''}
+      </div>
+      <div class="fp-chairs-row">${ch.repeat(bot)}</div>`;
+  },
+
+  /**
+   * Mesa redonda (sillas en círculo alrededor)
+   */
+  renderRoundTable(t, occ) {
+    const chairs = [];
+    for (let i = 0; i < t.capacity; i++) {
+      const a = ((360 / t.capacity) * i - 90) * Math.PI / 180;
+      const x = (50 + 46 * Math.cos(a)).toFixed(1);
+      const y = (50 + 46 * Math.sin(a)).toFixed(1);
+      chairs.push(`<div class="fp-chair" style="left:${x}%;top:${y}%"></div>`);
+    }
+    return `
+      <div class="fp-round-wrap">
+        <div class="fp-chairs-ring">${chairs.join('')}</div>
+        <div class="fp-surface round">
+          <strong>${t.name}</strong>
+          <small>👥 ${t.capacity}</small>
+          ${occ ? `<span class="fp-total">$${Number.parseFloat(t.active_total || 0).toFixed(2)}</span>` : ''}
+        </div>
+      </div>`;
   },
 
   /**

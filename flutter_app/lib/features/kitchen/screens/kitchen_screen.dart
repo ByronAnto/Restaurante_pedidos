@@ -221,6 +221,11 @@ class _KitchenScreenState extends State<KitchenScreen> with SingleTickerProvider
                         '📝 ${item['notes']}',
                         style: const TextStyle(fontSize: 11, color: AppConstants.textMuted),
                       ),
+                    if (item['modifiers']?.toString().isNotEmpty == true)
+                      Text(
+                        '🧩 ${item['modifiers']}',
+                        style: const TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: AppConstants.accentSecondary),
+                      ),
                   ],
                 ),
               )).toList(),

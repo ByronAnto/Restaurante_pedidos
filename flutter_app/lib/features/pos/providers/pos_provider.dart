@@ -120,14 +120,27 @@ class PosProvider extends ChangeNotifier {
     _currentTable = table;
     _orderType = 'dine_in';
 
-    // If table has active order, load its items
-    if (table['active_order'] != null) {
-      _currentOrder = Map<String, dynamic>.from(table['active_order']);
-    } else {
-      _currentOrder = null;
-    }
+    // Fix: Parse active order from flat fields if nested object doesn't exist
+    _currentOrder = _parseOrderFromTable(table);
+    
     _cart = [];
     notifyListeners();
+  }
+
+  Map<String, dynamic>? _parseOrderFromTable(Map<String, dynamic> table) {
+    if (table['active_order'] != null) {
+      return Map<String, dynamic>.from(table['active_order']);
+    }
+    // Fallback for flat fields from /tables/map
+    if (table['active_sale_id'] != null) {
+      return {
+        'id': table['active_sale_id'],
+        'sale_number': table['active_sale_number'],
+        'total': table['active_total'],
+        'items': table['order_items'] ?? [],
+      };
+    }
+    return null;
   }
 
   void startTakeaway() {
@@ -141,19 +154,35 @@ class PosProvider extends ChangeNotifier {
   // ─── Cart ───
 
   void addToCart(Map<String, dynamic> product) {
-    final existing = _cart.indexWhere((item) => item['product_id'] == product['id']);
+    addToCartWithModifiers(product, [], 0.0);
+  }
+
+  void addToCartWithModifiers(Map<String, dynamic> product, List<String> modifiers, double priceAdjustment) {
+    // Create a unique key for the cart item based on product ID and modifiers
+    // Modifiers list should be sorted to ensure consistency if order doesn't matter, 
+    // but usually they are added in order. simple join is fine for now.
+    final modifiersStr = modifiers.join(', ');
+    final cartKey = '${product['id']}_$modifiersStr';
+
+    final existing = _cart.indexWhere((item) => item['cart_key'] == cartKey);
 
     if (existing != -1) {
       _cart[existing] = Map<String, dynamic>.from(_cart[existing]);
       _cart[existing]['quantity'] = toInt(_cart[existing]['quantity']) + 1;
     } else {
+      final basePrice = toDouble(product['price']);
+      final finalPrice = basePrice + priceAdjustment;
+      
       _cart.add({
+        'cart_key': cartKey,
         'product_id': product['id'],
         'name': product['name'],
-        'price': product['price'],
+        'price': finalPrice, // Unit price with modifiers
+        'original_price': basePrice,
         'tax_rate': product['tax_rate'] ?? 0,
         'quantity': 1,
-        'notes': '',
+        'notes': modifiersStr, // Storing modifiers in notes for now as per backend expectation or simple display
+        'modifiers': modifiers, // Store raw list if needed for UI
       });
     }
     notifyListeners();
@@ -198,7 +227,10 @@ class PosProvider extends ChangeNotifier {
       final body = {
         'items': _cart.map((item) => {
           'productId': item['product_id'],
+          'productName': item['name'],
           'quantity': item['quantity'],
+          'unitPrice': item['price'],
+          'taxRate': item['tax_rate'],
           'notes': item['notes'] ?? '',
         }).toList(),
         'orderType': _orderType,
@@ -211,6 +243,18 @@ class PosProvider extends ChangeNotifier {
       final res = await _api.post('/pos/sales', body);
       _cart = [];
       await refreshTables();
+      
+      // Fix: Update current table/order reference to show "Charge" button
+      if (_orderType == 'dine_in' && _currentTable != null) {
+        final updatedTable = _tables.firstWhere(
+          (t) => t['id'] == _currentTable!['id'],
+          orElse: () => _currentTable!,
+        );
+        _currentTable = updatedTable;
+        _currentTable = updatedTable;
+        _currentOrder = _parseOrderFromTable(updatedTable);
+      }
+
       notifyListeners();
       return res;
     } catch (e) {
@@ -225,7 +269,10 @@ class PosProvider extends ChangeNotifier {
       final body = {
         'items': _cart.map((item) => {
           'productId': item['product_id'],
+          'productName': item['name'],
           'quantity': item['quantity'],
+          'unitPrice': item['price'],
+          'taxRate': item['tax_rate'],
           'notes': item['notes'] ?? '',
         }).toList(),
       };
@@ -233,6 +280,19 @@ class PosProvider extends ChangeNotifier {
       final res = await _api.post('/pos/orders/$orderId/items', body);
       _cart = [];
       await refreshTables();
+
+      // Fix: Update current table/order reference
+      if (_orderType == 'dine_in' && _currentTable != null) {
+        final updatedTable = _tables.firstWhere(
+          (t) => t['id'] == _currentTable!['id'],
+          orElse: () => _currentTable!,
+        );
+        _currentTable = updatedTable;
+        if (updatedTable['active_order'] != null) {
+          _currentOrder = Map<String, dynamic>.from(updatedTable['active_order']);
+        }
+      }
+
       notifyListeners();
       return res;
     } catch (e) {
@@ -279,7 +339,10 @@ class PosProvider extends ChangeNotifier {
       final body = {
         'items': _cart.map((item) => {
           'productId': item['product_id'],
+          'productName': item['name'],
           'quantity': item['quantity'],
+          'unitPrice': item['price'],
+          'taxRate': item['tax_rate'],
           'notes': item['notes'] ?? '',
         }).toList(),
         'orderType': 'takeaway',
@@ -302,6 +365,7 @@ class PosProvider extends ChangeNotifier {
     _currentTable = null;
     _currentOrder = null;
     _cart = [];
+    _orderType = 'dine_in';
     notifyListeners();
   }
 }

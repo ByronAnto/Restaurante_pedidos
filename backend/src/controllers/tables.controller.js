@@ -37,6 +37,8 @@ class TablesController {
         try {
             const tablesResult = await query(`
                 SELECT t.*,
+                    z.zone_type, z.icon as zone_icon, z.grid_col, z.grid_row,
+                    z.grid_w, z.grid_h, z.color as zone_color,
                     s.id as active_sale_id,
                     s.sale_number as active_sale_number,
                     s.total as active_total,
@@ -50,10 +52,11 @@ class TablesController {
                         'subtotal', si.subtotal
                     )) FILTER (WHERE si.id IS NOT NULL), '[]') as order_items
                 FROM tables t
+                LEFT JOIN zones z ON z.id = t.zone_id
                 LEFT JOIN sales s ON s.table_id = t.id AND s.status = 'pending'
                 LEFT JOIN sale_items si ON si.sale_id = s.id
                 WHERE t.active = true
-                GROUP BY t.id, s.id
+                GROUP BY t.id, z.id, s.id
                 ORDER BY t.zone, t.name
             `);
 
@@ -79,13 +82,13 @@ class TablesController {
      */
     async createTable(req, res, next) {
         try {
-            const { name, capacity, positionX, positionY, shape, zone } = req.body;
+            const { name, capacity, positionX, positionY, shape, zone, zoneId } = req.body;
             if (!name) return error(res, 'El nombre es requerido', 400);
 
             const result = await query(
-                `INSERT INTO tables (name, capacity, position_x, position_y, shape, zone)
-                 VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-                [name, capacity || 4, positionX || 0, positionY || 0, shape || 'square', zone || 'Salón']
+                `INSERT INTO tables (name, capacity, position_x, position_y, shape, zone, zone_id)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+                [name, capacity || 4, positionX || 0, positionY || 0, shape || 'square', zone || 'Salón', zoneId || null]
             );
             return success(res, result.rows[0], 'Mesa creada', 201);
         } catch (err) {
@@ -98,11 +101,11 @@ class TablesController {
      */
     async updateTable(req, res, next) {
         try {
-            const { name, capacity, positionX, positionY, shape, zone } = req.body;
+            const { name, capacity, positionX, positionY, shape, zone, zoneId } = req.body;
             const result = await query(
-                `UPDATE tables SET name=$1, capacity=$2, position_x=$3, position_y=$4, shape=$5, zone=$6
-                 WHERE id=$7 RETURNING *`,
-                [name, capacity, positionX, positionY, shape, zone, req.params.id]
+                `UPDATE tables SET name=$1, capacity=$2, position_x=$3, position_y=$4, shape=$5, zone=$6, zone_id=$7
+                 WHERE id=$8 RETURNING *`,
+                [name, capacity, positionX, positionY, shape, zone, zoneId, req.params.id]
             );
             if (result.rows.length === 0) return error(res, 'Mesa no encontrada', 404);
             return success(res, result.rows[0], 'Mesa actualizada');
