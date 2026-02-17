@@ -150,6 +150,10 @@ const Products = {
                 <label class="form-label">Descripción</label>
                 <input type="text" class="form-input" id="product-description">
               </div>
+              <div class="form-group" style="display:flex;align-items:center;gap:var(--space-sm);padding:8px 12px;background:var(--bg-primary);border-radius:var(--radius-md);border:1px solid var(--border-color)">
+                <input type="checkbox" id="product-show-all" style="width:18px;height:18px;accent-color:var(--accent-primary);cursor:pointer">
+                <label for="product-show-all" style="cursor:pointer;font-size:0.9rem;color:var(--text-secondary)">🌐 Mostrar en todas las categorías</label>
+              </div>
               <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" onclick="Products.closeModal('product-modal')">Cancelar</button>
                 <button type="submit" class="btn btn-primary">💾 Guardar</button>
@@ -186,16 +190,16 @@ const Products = {
 
   renderRows(products) {
     return products.map((p) => {
-      const price = parseFloat(p.price);
+      const pvp = parseFloat(p.price);
       const taxRate = parseFloat(p.tax_rate);
-      const pvp = price * (1 + taxRate / 100);
-      const ivaAmount = price * (taxRate / 100);
+      const base = taxRate > 0 ? pvp / (1 + taxRate / 100) : pvp;
+      const ivaAmount = pvp - base;
       return `
       <tr data-name="${p.name.toLowerCase()}">
         <td><strong>${p.name}</strong></td>
-        <td>${p.category_icon || ''} ${p.category_name || '—'}</td>
+        <td>${p.category_icon || ''} ${p.category_name || '—'}${p.show_in_all_categories ? ' <span title="Visible en todas las categorías" style="font-size:0.75rem">🌐</span>' : ''}</td>
         <td class="fw-bold text-accent">$${pvp.toFixed(2)}</td>
-        <td style="color:var(--text-secondary)">$${price.toFixed(2)}</td>
+        <td style="color:var(--text-secondary)">$${base.toFixed(2)}</td>
         <td>${taxRate > 0 ? `<span style="color:var(--accent-primary)">$${ivaAmount.toFixed(2)}</span> (${taxRate}%)` : '<span class="text-muted">0%</span>'}</td>
         <td>$${parseFloat(p.cost).toFixed(2)}</td>
         <td>${p.available ? '<span class="badge badge-success">Disponible</span>' : '<span class="badge badge-danger">No disp.</span>'}</td>
@@ -247,11 +251,11 @@ const Products = {
     document.getElementById('product-tax').value = product ? product.tax_rate : '15';
     document.getElementById('product-cost').value = product ? product.cost : '0';
     document.getElementById('product-description').value = product ? product.description || '' : '';
+    document.getElementById('product-show-all').checked = product ? product.show_in_all_categories : false;
 
-    // PVP = price * (1 + taxRate/100)
+    // price = PVP (precio final al cliente, IVA incluido)
     if (product) {
-      const pvp = parseFloat(product.price) * (1 + parseFloat(product.tax_rate) / 100);
-      document.getElementById('product-pvp').value = pvp.toFixed(2);
+      document.getElementById('product-pvp').value = parseFloat(product.price).toFixed(2);
     } else {
       document.getElementById('product-pvp').value = '';
     }
@@ -281,16 +285,15 @@ const Products = {
     const pvp = parseFloat(document.getElementById('product-pvp').value);
     const taxRate = parseFloat(document.getElementById('product-tax').value);
 
-    // Calculate base price from PVP: basePrice = PVP / (1 + taxRate/100)
-    const basePrice = pvp / (1 + taxRate / 100);
-
+    // Guardar PVP directamente (precio final al cliente, IVA incluido)
     const data = {
       name: document.getElementById('product-name').value,
       categoryId: document.getElementById('product-category').value || null,
-      price: parseFloat(basePrice.toFixed(2)),
+      price: pvp,
       cost: parseFloat(document.getElementById('product-cost').value),
       taxRate: taxRate,
       description: document.getElementById('product-description').value,
+      showInAllCategories: document.getElementById('product-show-all').checked,
     };
 
     try {

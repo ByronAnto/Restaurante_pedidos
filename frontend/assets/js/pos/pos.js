@@ -462,7 +462,7 @@ const POS = {
     }
 
     return products.map((product) => {
-      const pvp = parseFloat(product.price) * (1 + parseFloat(product.tax_rate) / 100);
+      const pvp = parseFloat(product.price);
       return `
       <div class="pos-product-card ${!product.available ? 'unavailable' : ''}" 
            onclick="POS.addToCart(${product.id})">
@@ -576,14 +576,14 @@ const POS = {
     if (existingIndex >= 0) {
       this.cart[existingIndex].quantity++;
     } else {
-      const basePrice = parseFloat(product.price);
+      const pvp = parseFloat(product.price);
       const taxRate = parseFloat(product.tax_rate);
-      const pvp = basePrice * (1 + taxRate / 100);
+      const basePrice = taxRate > 0 ? pvp / (1 + taxRate / 100) : pvp;
       this.cart.push({
         productId: product.id,
         productName: product.name,
-        unitPrice: basePrice,   // Precio base (para enviar al backend)
-        pvp: Math.round(pvp * 100) / 100, // PVP redondeado (precio final al cliente)
+        unitPrice: Math.round(basePrice * 100) / 100,   // Precio base (para enviar al backend)
+        pvp: pvp, // PVP = precio final al cliente (IVA incluido)
         taxRate: taxRate,
         quantity: 1,
         trackStock: product.track_stock,
@@ -697,7 +697,7 @@ const POS = {
    */
   getFilteredProducts() {
     return this.products.filter((p) => {
-      const matchCategory = !this.selectedCategory || p.category_id === this.selectedCategory;
+      const matchCategory = !this.selectedCategory || p.category_id === this.selectedCategory || p.show_in_all_categories;
       const matchSearch = !this.searchTerm || p.name.toLowerCase().includes(this.searchTerm);
       return matchCategory && matchSearch;
     });

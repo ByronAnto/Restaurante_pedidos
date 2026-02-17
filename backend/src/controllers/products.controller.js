@@ -107,16 +107,16 @@ class ProductsController {
 
     async createProduct(req, res, next) {
         try {
-            const { categoryId, name, description, price, cost, taxRate, imageUrl, available, trackStock, stockQuantity } = req.body;
+            const { categoryId, name, description, price, cost, taxRate, imageUrl, available, trackStock, stockQuantity, showInAllCategories } = req.body;
 
             if (!name || price === undefined) {
                 return error(res, 'Nombre y precio son requeridos', 400);
             }
 
             const result = await query(
-                `INSERT INTO products (category_id, name, description, price, cost, tax_rate, image_url, available, track_stock, stock_quantity)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
-                [categoryId, name, description || '', price, cost || 0, taxRate || 15, imageUrl, available !== false, trackStock || false, stockQuantity || 0]
+                `INSERT INTO products (category_id, name, description, price, cost, tax_rate, image_url, available, track_stock, stock_quantity, show_in_all_categories)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+                [categoryId, name, description || '', price, cost || 0, taxRate || 15, imageUrl, available !== false, trackStock || false, stockQuantity || 0, showInAllCategories || false]
             );
 
             return created(res, result.rows[0], 'Producto creado');
@@ -127,7 +127,7 @@ class ProductsController {
 
     async updateProduct(req, res, next) {
         try {
-            const { categoryId, name, description, price, cost, taxRate, imageUrl, available, trackStock, stockQuantity } = req.body;
+            const { categoryId, name, description, price, cost, taxRate, imageUrl, available, trackStock, stockQuantity, showInAllCategories } = req.body;
 
             const result = await query(
                 `UPDATE products SET
@@ -136,9 +136,10 @@ class ProductsController {
          cost = COALESCE($5, cost), tax_rate = COALESCE($6, tax_rate),
          image_url = COALESCE($7, image_url), available = COALESCE($8, available),
          track_stock = COALESCE($9, track_stock), stock_quantity = COALESCE($10, stock_quantity),
+         show_in_all_categories = COALESCE($11, show_in_all_categories),
          updated_at = CURRENT_TIMESTAMP
-         WHERE id = $11 RETURNING *`,
-                [categoryId, name, description, price, cost, taxRate, imageUrl, available, trackStock, stockQuantity, req.params.id]
+         WHERE id = $12 RETURNING *`,
+                [categoryId, name, description, price, cost, taxRate, imageUrl, available, trackStock, stockQuantity, showInAllCategories, req.params.id]
             );
 
             if (result.rows.length === 0) return error(res, 'Producto no encontrado', 404);

@@ -133,8 +133,11 @@ const autoBootstrap = async () => {
                 name VARCHAR(150) NOT NULL, description TEXT, price DECIMAL(10,2) NOT NULL DEFAULT 0,
                 cost DECIMAL(10,2) DEFAULT 0, tax_rate DECIMAL(5,2) DEFAULT 15.00, image_url VARCHAR(500),
                 available BOOLEAN DEFAULT true, track_stock BOOLEAN DEFAULT false, stock_quantity INT DEFAULT 0,
+                show_in_all_categories BOOLEAN DEFAULT false,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )`);
+            // Migración: agregar columna si no existe
+            await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS show_in_all_categories BOOLEAN DEFAULT false`);
             await client.query(`CREATE TABLE IF NOT EXISTS sales (
                 id SERIAL PRIMARY KEY, user_id INT REFERENCES users(id), sale_number VARCHAR(20) UNIQUE NOT NULL,
                 status VARCHAR(20) DEFAULT 'completed' CHECK (status IN ('pending','completed','cancelled')),
