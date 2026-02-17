@@ -1,0 +1,49 @@
+name: 🚀 Deploy RestaurantePOS
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  deploy:
+    name: 🏗️ Build & Deploy
+    runs-on: self-hosted
+
+    steps:
+      - name: 📥 Checkout código
+        uses: actions/checkout@v4
+
+      - name: 🛑 Detener contenedores anteriores
+        run: docker-compose down --remove-orphans || true
+
+      - name: 🏗️ Construir y levantar contenedores
+        run: docker-compose up -d --build --force-recreate
+
+      - name: ⏳ Esperar que la DB esté lista
+        run: |
+          echo "Esperando a PostgreSQL..."
+          for i in $(seq 1 30); do
+            if docker exec restaurante-db pg_isready -U postgres > /dev/null 2>&1; then
+              echo "✅ PostgreSQL está listo"
+              break
+            fi
+            echo "Intento $i/30..."
+            sleep 2
+          done
+
+      - name: ✅ Verificar servicios
+        run: |
+          echo "=== Estado de contenedores ==="
+          docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+          echo ""
+          echo "=== Health Check API ==="
+          sleep 3
+          curl -sf http://localhost:3000/api/auth/me || echo "⚠️ API aún iniciando (normal en primer deploy)"
+          echo ""
+          echo "=== Logs del backend ==="
+          docker logs restaurante-api --tail 10
+
+      - name: 🧹 Limpiar imágenes sin uso
+        run: docker image prune -f || true
