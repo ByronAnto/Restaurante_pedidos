@@ -22,7 +22,8 @@ class KitchenController {
            'id', koi.id,
            'product_name', koi.product_name,
            'quantity', koi.quantity,
-           'notes', koi.notes
+           'notes', koi.notes,
+           'modifiers', koi.modifiers
          )) as items
          FROM kitchen_orders ko
          LEFT JOIN sales s ON ko.sale_id = s.id
@@ -50,7 +51,8 @@ class KitchenController {
            'id', koi.id,
            'product_name', koi.product_name,
            'quantity', koi.quantity,
-           'notes', koi.notes
+           'notes', koi.notes,
+           'modifiers', koi.modifiers
          )) as items
          FROM kitchen_orders ko
          LEFT JOIN sales s ON ko.sale_id = s.id

@@ -184,6 +184,19 @@ const Products = {
             </div>
           </div>
         </div>
+
+        <!-- Modal Modificadores -->
+        <div class="modal-overlay" id="modifiers-modal">
+          <div class="modal-content" style="max-width:600px">
+            <div class="modal-header">
+              <h3 class="modal-title" id="modifiers-modal-title">⚙️ Modificadores</h3>
+              <button class="modal-close" onclick="Products.closeModal('modifiers-modal')">✕</button>
+            </div>
+            <div id="modifiers-editor">
+              <p style="color:var(--text-muted);text-align:center;padding:20px">Cargando...</p>
+            </div>
+          </div>
+        </div>
       </div>
     `;
   },
@@ -194,9 +207,10 @@ const Products = {
       const taxRate = parseFloat(p.tax_rate);
       const base = taxRate > 0 ? pvp / (1 + taxRate / 100) : pvp;
       const ivaAmount = pvp - base;
+      const hasModifiers = p.modifier_groups && p.modifier_groups.length > 0;
       return `
       <tr data-name="${p.name.toLowerCase()}">
-        <td><strong>${p.name}</strong></td>
+        <td><strong>${p.name}</strong>${hasModifiers ? ' <span title="Tiene modificadores" style="font-size:0.75rem;cursor:help">⚙️</span>' : ''}</td>
         <td>${p.category_icon || ''} ${p.category_name || '—'}${p.show_in_all_categories ? ' <span title="Visible en todas las categorías" style="font-size:0.75rem">🌐</span>' : ''}</td>
         <td class="fw-bold text-accent">$${pvp.toFixed(2)}</td>
         <td style="color:var(--text-secondary)">$${base.toFixed(2)}</td>
@@ -205,6 +219,7 @@ const Products = {
         <td>${p.available ? '<span class="badge badge-success">Disponible</span>' : '<span class="badge badge-danger">No disp.</span>'}</td>
         <td>
           <div class="d-flex gap-sm">
+            <button class="btn btn-sm btn-secondary" onclick="Products.openModifiersModal(${p.id})" title="Modificadores">⚙️</button>
             <button class="btn btn-sm btn-secondary" onclick="Products.editProduct(${p.id})">✏️</button>
             <button class="btn btn-sm btn-danger" onclick="Products.deleteProduct(${p.id})">🗑️</button>
           </div>
@@ -349,6 +364,159 @@ const Products = {
       this.render(document.getElementById('page-container'));
     } catch (err) {
       Toast.error(err.message);
+    }
+  },
+
+  // ─── MODIFICADORES ───
+
+  /** Datos temporales del editor de modificadores */
+  _modGroups: [],
+  _modProductId: null,
+
+  /**
+   * Abre el modal de modificadores para un producto
+   */
+  async openModifiersModal(productId) {
+    const product = this.products.find(p => p.id === productId);
+    if (!product) return;
+
+    this._modProductId = productId;
+    document.getElementById('modifiers-modal-title').textContent = `⚙️ Modificadores — ${product.name}`;
+    document.getElementById('modifiers-modal').classList.add('active');
+
+    // Cargar modificadores existentes
+    try {
+      const res = await API.get(`/products/${productId}/modifiers`);
+      this._modGroups = (res.data || []).map(g => ({
+        name: g.name,
+        required: g.required,
+        maxSelect: g.max_select,
+        options: (g.options || []).map(o => ({ name: o.name, priceAdjustment: parseFloat(o.price_adjustment) || 0 })),
+      }));
+    } catch {
+      this._modGroups = [];
+    }
+
+    this.renderModifiersEditor();
+  },
+
+  /**
+   * Renderiza el editor de grupos y opciones
+   */
+  renderModifiersEditor() {
+    const container = document.getElementById('modifiers-editor');
+    if (!container) return;
+
+    container.innerHTML = `
+      <div style="margin-bottom:var(--space-md)">
+        <p style="font-size:0.85rem;color:var(--text-secondary);margin:0 0 12px">
+          Agrega grupos de opciones. Ej: grupo "Tipo" con opciones "Verde", "Queso", "Carne".
+        </p>
+        ${this._modGroups.map((group, gi) => `
+          <div style="border:1px solid var(--border-color);border-radius:var(--radius-md);padding:12px;margin-bottom:12px;background:var(--bg-primary)">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+              <input type="text" class="form-input" value="${group.name}" placeholder="Nombre del grupo (ej: Tipo)"
+                     onchange="Products.updateModGroup(${gi}, 'name', this.value)"
+                     style="flex:1;font-weight:600">
+              <label style="display:flex;align-items:center;gap:4px;font-size:0.8rem;white-space:nowrap;cursor:pointer">
+                <input type="checkbox" ${group.required ? 'checked' : ''} 
+                       onchange="Products.updateModGroup(${gi}, 'required', this.checked)"
+                       style="width:16px;height:16px">
+                Obligatorio
+              </label>
+              <button type="button" class="btn btn-sm btn-danger" onclick="Products.removeModGroup(${gi})" title="Eliminar grupo">🗑️</button>
+            </div>
+            <div style="padding-left:12px">
+              ${group.options.map((opt, oi) => `
+                <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+                  <span style="color:var(--text-muted);font-size:0.8rem;width:16px">${oi + 1}.</span>
+                  <input type="text" class="form-input" value="${opt.name}" placeholder="Opción (ej: Verde)"
+                         onchange="Products.updateModOption(${gi}, ${oi}, 'name', this.value)"
+                         style="flex:1;font-size:0.9rem">
+                  <div style="display:flex;align-items:center;gap:2px;width:100px">
+                    <span style="font-size:0.8rem;color:var(--text-muted)">+$</span>
+                    <input type="number" class="form-input" value="${opt.priceAdjustment || 0}" step="0.01" min="0"
+                           onchange="Products.updateModOption(${gi}, ${oi}, 'priceAdjustment', parseFloat(this.value) || 0)"
+                           style="width:70px;font-size:0.85rem" title="Precio adicional">
+                  </div>
+                  <button type="button" class="btn btn-sm" onclick="Products.removeModOption(${gi}, ${oi})" 
+                          style="padding:2px 6px;font-size:0.8rem" title="Quitar opción">✕</button>
+                </div>
+              `).join('')}
+              <button type="button" class="btn btn-sm btn-secondary" onclick="Products.addModOption(${gi})"
+                      style="font-size:0.8rem;padding:4px 10px;margin-top:4px">
+                + Agregar opción
+              </button>
+            </div>
+          </div>
+        `).join('')}
+        <button type="button" class="btn btn-secondary" onclick="Products.addModGroup()" style="width:100%">
+          ➕ Agregar grupo de modificadores
+        </button>
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:var(--space-sm);border-top:1px solid var(--border-color);padding-top:12px">
+        <button type="button" class="btn btn-secondary" onclick="Products.closeModal('modifiers-modal')">Cancelar</button>
+        <button type="button" class="btn btn-primary" onclick="Products.saveModifiers()">💾 Guardar Modificadores</button>
+      </div>
+    `;
+  },
+
+  addModGroup() {
+    this._modGroups.push({ name: '', required: true, maxSelect: 1, options: [{ name: '', priceAdjustment: 0 }] });
+    this.renderModifiersEditor();
+  },
+
+  removeModGroup(gi) {
+    this._modGroups.splice(gi, 1);
+    this.renderModifiersEditor();
+  },
+
+  updateModGroup(gi, field, value) {
+    this._modGroups[gi][field] = value;
+  },
+
+  addModOption(gi) {
+    this._modGroups[gi].options.push({ name: '', priceAdjustment: 0 });
+    this.renderModifiersEditor();
+  },
+
+  removeModOption(gi, oi) {
+    this._modGroups[gi].options.splice(oi, 1);
+    this.renderModifiersEditor();
+  },
+
+  updateModOption(gi, oi, field, value) {
+    this._modGroups[gi].options[oi][field] = value;
+  },
+
+  async saveModifiers() {
+    // Validar
+    for (const g of this._modGroups) {
+      if (!g.name.trim()) {
+        Toast.warning('Cada grupo debe tener un nombre');
+        return;
+      }
+      const validOpts = g.options.filter(o => o.name.trim());
+      if (validOpts.length === 0) {
+        Toast.warning(`El grupo "${g.name}" necesita al menos una opción`);
+        return;
+      }
+    }
+
+    // Limpiar opciones vacías
+    const groups = this._modGroups.map(g => ({
+      ...g,
+      options: g.options.filter(o => o.name.trim()),
+    }));
+
+    try {
+      await API.put(`/products/${this._modProductId}/modifiers`, { groups });
+      Toast.success('Modificadores guardados');
+      this.closeModal('modifiers-modal');
+      await this.loadData();
+      this.render(document.getElementById('page-container'));
+    } catch (err) {
+      Toast.error(err.message || 'Error guardando modificadores');
     }
   },
 };

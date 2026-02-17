@@ -214,6 +214,7 @@
                 '<ul class="order-items">' +
                     items.filter(function(i){return i.id;}).map(function(i) {
                         return '<li><span class="item-qty">' + i.quantity + 'x</span> ' + i.product_name +
+                            (i.modifiers ? '<div style="margin-left:28px;font-size:0.85em;color:#3b82f6;font-weight:600;font-style:italic">▸ ' + i.modifiers + '</div>' : '') +
                             (i.notes ? '<span class="item-notes">📝 ' + i.notes + '</span>' : '') + '</li>';
                     }).join('') +
                 '</ul>' +

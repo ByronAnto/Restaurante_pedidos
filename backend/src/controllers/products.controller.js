@@ -85,7 +85,37 @@ class ProductsController {
                 params
             );
 
-            return success(res, result.rows);
+            // Adjuntar modificadores a cada producto que los tenga
+            const productIds = result.rows.map(p => p.id);
+            let modifierMap = {};
+
+            if (productIds.length > 0) {
+                const groupsRes = await query(
+                    `SELECT mg.*, json_agg(
+                        json_build_object('id', mo.id, 'name', mo.name, 'price_adjustment', mo.price_adjustment, 'available', mo.available, 'display_order', mo.display_order)
+                        ORDER BY mo.display_order
+                     ) AS options
+                     FROM modifier_groups mg
+                     LEFT JOIN modifier_options mo ON mo.modifier_group_id = mg.id
+                     WHERE mg.product_id = ANY($1)
+                     GROUP BY mg.id
+                     ORDER BY mg.display_order`,
+                    [productIds]
+                );
+                for (const g of groupsRes.rows) {
+                    if (!modifierMap[g.product_id]) modifierMap[g.product_id] = [];
+                    // Limpiar opciones nulas (LEFT JOIN sin opciones)
+                    const opts = (g.options || []).filter(o => o.id !== null);
+                    modifierMap[g.product_id].push({ ...g, options: opts });
+                }
+            }
+
+            const products = result.rows.map(p => ({
+                ...p,
+                modifier_groups: modifierMap[p.id] || [],
+            }));
+
+            return success(res, products);
         } catch (err) {
             next(err);
         }
@@ -154,6 +184,85 @@ class ProductsController {
             const result = await query('DELETE FROM products WHERE id = $1 RETURNING id', [req.params.id]);
             if (result.rows.length === 0) return error(res, 'Producto no encontrado', 404);
             return success(res, null, 'Producto eliminado');
+        } catch (err) {
+            next(err);
+        }
+    }
+
+    // ─── MODIFICADORES ───
+
+    /**
+     * Obtiene los grupos de modificadores con sus opciones para un producto
+     */
+    async getModifiersByProduct(req, res, next) {
+        try {
+            const groups = await query(
+                `SELECT * FROM modifier_groups WHERE product_id = $1 ORDER BY display_order ASC`,
+                [req.params.productId]
+            );
+
+            const result = [];
+            for (const group of groups.rows) {
+                const options = await query(
+                    `SELECT * FROM modifier_options WHERE modifier_group_id = $1 ORDER BY display_order ASC`,
+                    [group.id]
+                );
+                result.push({ ...group, options: options.rows });
+            }
+
+            return success(res, result);
+        } catch (err) {
+            next(err);
+        }
+    }
+
+    /**
+     * Guarda (reemplaza) todos los grupos de modificadores de un producto
+     * Body: { groups: [{ name, required, maxSelect, displayOrder, options: [{ name, priceAdjustment, displayOrder }] }] }
+     */
+    async saveModifiers(req, res, next) {
+        try {
+            const { productId } = req.params;
+            const { groups } = req.body;
+
+            // Verificar que el producto existe
+            const prodCheck = await query('SELECT id FROM products WHERE id = $1', [productId]);
+            if (prodCheck.rows.length === 0) return error(res, 'Producto no encontrado', 404);
+
+            // Eliminar grupos anteriores (CASCADE elimina opciones)
+            await query('DELETE FROM modifier_groups WHERE product_id = $1', [productId]);
+
+            if (!groups || groups.length === 0) {
+                return success(res, [], 'Modificadores eliminados');
+            }
+
+            const saved = [];
+            for (let i = 0; i < groups.length; i++) {
+                const g = groups[i];
+                const groupRes = await query(
+                    `INSERT INTO modifier_groups (product_id, name, required, max_select, display_order)
+                     VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+                    [productId, g.name, g.required !== false, g.maxSelect || 1, g.displayOrder || i]
+                );
+                const group = groupRes.rows[0];
+                const opts = [];
+
+                if (g.options && g.options.length > 0) {
+                    for (let j = 0; j < g.options.length; j++) {
+                        const o = g.options[j];
+                        const optRes = await query(
+                            `INSERT INTO modifier_options (modifier_group_id, name, price_adjustment, display_order)
+                             VALUES ($1, $2, $3, $4) RETURNING *`,
+                            [group.id, o.name, o.priceAdjustment || 0, o.displayOrder || j]
+                        );
+                        opts.push(optRes.rows[0]);
+                    }
+                }
+
+                saved.push({ ...group, options: opts });
+            }
+
+            return success(res, saved, 'Modificadores guardados');
         } catch (err) {
             next(err);
         }

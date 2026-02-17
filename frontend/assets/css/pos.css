@@ -163,6 +163,118 @@
     color: var(--accent-primary);
 }
 
+/* Badge de modificadores en tarjeta de producto */
+.pos-product-modifier-badge {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    font-size: 0.7rem;
+    opacity: 0.7;
+}
+
+.pos-product-card {
+    position: relative;
+}
+
+/* Modificadores en item del ticket */
+.pos-ticket-item-mods {
+    font-size: 0.75rem;
+    color: var(--accent-primary);
+    font-weight: 500;
+    margin-top: 1px;
+    font-style: italic;
+}
+
+/* ─── Modal de Modificadores en POS ─── */
+.pos-mod-options-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.pos-mod-option-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    border: 2px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-card);
+    transition: all var(--transition-fast);
+}
+
+.pos-mod-option-row.active {
+    border-color: var(--accent-primary);
+    background: rgba(59, 130, 246, 0.08);
+}
+
+.pos-mod-option-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.pos-mod-option-name {
+    font-weight: 600;
+    font-size: 0.92rem;
+    color: var(--text-primary);
+}
+
+.pos-mod-option-price {
+    font-size: 0.75rem;
+    color: var(--color-success);
+    font-weight: 500;
+}
+
+.pos-mod-qty-control {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+    background: var(--bg-primary);
+}
+
+.pos-mod-qty-btn {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-secondary);
+    border: none;
+    color: var(--text-primary);
+    font-size: 1.1rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background var(--transition-fast);
+}
+
+.pos-mod-qty-btn:hover:not(:disabled) {
+    background: var(--accent-primary);
+    color: #fff;
+}
+
+.pos-mod-qty-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+.pos-mod-qty-value {
+    width: 36px;
+    text-align: center;
+    font-weight: 700;
+    font-size: 1rem;
+    color: var(--text-muted);
+    user-select: none;
+}
+
+.pos-mod-qty-value.has-qty {
+    color: var(--accent-primary);
+    font-size: 1.1rem;
+}
+
 /* ─── Panel derecho: Ticket ─── */
 .pos-ticket-panel {
     display: flex;

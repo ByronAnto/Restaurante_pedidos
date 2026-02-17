@@ -17,4 +17,8 @@ router.post('/', authorize('admin'), (req, res, next) => productsController.crea
 router.put('/:id', authorize('admin'), (req, res, next) => productsController.updateProduct(req, res, next));
 router.delete('/:id', authorize('admin'), (req, res, next) => productsController.deleteProduct(req, res, next));
 
+// Modificadores de producto
+router.get('/:productId/modifiers', (req, res, next) => productsController.getModifiersByProduct(req, res, next));
+router.put('/:productId/modifiers', authorize('admin'), (req, res, next) => productsController.saveModifiers(req, res, next));
+
 module.exports = router;

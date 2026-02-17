@@ -147,6 +147,7 @@ const Kitchen = {
           ${items.filter(i => i.id).map((item) => `
             <li style="padding:4px 0;font-size:0.85rem;border-bottom:1px dashed var(--border-color)">
               <strong style="color:var(--accent-primary)">${item.quantity}x</strong> ${item.product_name}
+              ${item.modifiers ? `<div style="margin-left:20px;font-size:0.8rem;color:var(--accent-primary);font-weight:600;font-style:italic">▸ ${item.modifiers}</div>` : ''}
               ${item.notes ? `<div class="text-muted fs-xs" style="margin-left:20px;font-style:italic">📝 ${item.notes}</div>` : ''}
             </li>
           `).join('')}

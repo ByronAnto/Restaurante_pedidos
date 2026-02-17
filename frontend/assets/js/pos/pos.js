@@ -246,7 +246,7 @@ const POS = {
                 return `
                 <div class="pos-existing-item">
                   <span class="pos-existing-item-qty">${item.quantity}x</span>
-                  <span class="pos-existing-item-name">${item.product_name}</span>
+                  <span class="pos-existing-item-name">${item.product_name}${item.modifiers ? ` <em style="color:var(--accent-primary);font-size:0.8rem">(${item.modifiers})</em>` : ''}</span>
                   <span class="pos-existing-item-price">$${itemPVP.toFixed(2)}</span>
                 </div>
               `}).join('')}
@@ -463,12 +463,14 @@ const POS = {
 
     return products.map((product) => {
       const pvp = parseFloat(product.price);
+      const hasModifiers = product.modifier_groups && product.modifier_groups.length > 0;
       return `
       <div class="pos-product-card ${!product.available ? 'unavailable' : ''}" 
            onclick="POS.addToCart(${product.id})">
         <div class="pos-product-emoji">${product.category_icon || '🍽️'}</div>
         <div class="pos-product-name">${product.name}</div>
         <div class="pos-product-price">$${pvp.toFixed(2)}</div>
+        ${hasModifiers ? '<div class="pos-product-modifier-badge">⚙️</div>' : ''}
       </div>
     `;
     }).join('');
@@ -480,9 +482,10 @@ const POS = {
   renderCartItems() {
     return this.cart.map((item, index) => {
       const lineTotal = item.pvp * item.quantity;
+      const modLabel = item.modifiers ? `<div class="pos-ticket-item-mods">${item.modifiers}</div>` : '';
       return `
       <div class="pos-ticket-item">
-        <div class="pos-ticket-item-name">${item.productName}</div>
+        <div class="pos-ticket-item-name">${item.productName}${modLabel}</div>
         <div class="pos-ticket-item-row">
           <span class="pos-ticket-item-uprice">$${item.pvp.toFixed(2)} c/u</span>
           <div class="pos-ticket-item-qty">
@@ -566,31 +569,227 @@ const POS = {
 
   /**
    * Agrega producto al carrito
+   * Si tiene modificadores, abre modal de selección primero
    */
   addToCart(productId) {
     const product = this.products.find((p) => p.id === productId);
     if (!product) return;
 
-    const existingIndex = this.cart.findIndex((item) => item.productId === productId);
+    // Si tiene modificadores, mostrar modal de selección
+    if (product.modifier_groups && product.modifier_groups.length > 0) {
+      this.openModifierModal(product);
+      return;
+    }
+
+    this._addProductToCart(product, '');
+  },
+
+  /**
+   * Agrega un producto al carrito (sin o con modificadores ya seleccionados)
+   */
+  _addProductToCart(product, modifiersText, priceAdjustment = 0) {
+    this._addProductToCartWithQty(product, modifiersText, priceAdjustment, 1);
+  },
+
+  /**
+   * Agrega producto al carrito con cantidad específica y modificador
+   */
+  _addProductToCartWithQty(product, modifiersText, priceAdjustment = 0, qty = 1) {
+    const pvp = parseFloat(product.price) + priceAdjustment;
+    const taxRate = parseFloat(product.tax_rate);
+    const cartKey = `${product.id}_${modifiersText}`;
+
+    const existingIndex = this.cart.findIndex((item) => item.cartKey === cartKey);
 
     if (existingIndex >= 0) {
-      this.cart[existingIndex].quantity++;
+      this.cart[existingIndex].quantity += qty;
     } else {
-      const pvp = parseFloat(product.price);
-      const taxRate = parseFloat(product.tax_rate);
       const basePrice = taxRate > 0 ? pvp / (1 + taxRate / 100) : pvp;
       this.cart.push({
+        cartKey,
         productId: product.id,
         productName: product.name,
-        unitPrice: Math.round(basePrice * 100) / 100,   // Precio base (para enviar al backend)
-        pvp: pvp, // PVP = precio final al cliente (IVA incluido)
+        unitPrice: Math.round(basePrice * 100) / 100,
+        pvp: pvp,
         taxRate: taxRate,
-        quantity: 1,
+        quantity: qty,
         trackStock: product.track_stock,
+        modifiers: modifiersText,
       });
     }
 
     this.updateTicketUI();
+  },
+
+  // ─── MODAL DE MODIFICADORES EN POS ───
+
+  /**
+   * Abre el modal para seleccionar modificadores de un producto
+   */
+  openModifierModal(product) {
+    this._pendingModProduct = product;
+    this._modQuantities = {};
+
+    // Inicializar cantidades en 0 por cada opción de cada grupo
+    product.modifier_groups.forEach(g => {
+      this._modQuantities[g.id] = {};
+      (g.options || []).forEach(o => {
+        this._modQuantities[g.id][o.id] = 0;
+      });
+    });
+
+    // Crear o reutilizar modal
+    let modal = document.getElementById('pos-modifier-modal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'pos-modifier-modal';
+      modal.className = 'modal-overlay';
+      document.body.appendChild(modal);
+    }
+
+    this._renderModifierModal();
+    modal.classList.add('active');
+  },
+
+  /**
+   * Renderiza el contenido del modal de modificadores
+   */
+  _renderModifierModal() {
+    const product = this._pendingModProduct;
+    const modal = document.getElementById('pos-modifier-modal');
+    if (!modal || !product) return;
+
+    const groups = product.modifier_groups;
+    const basePvp = parseFloat(product.price);
+
+    // Contar total de unidades y ajuste de precio
+    let totalUnits = 0;
+    let totalAdjustment = 0;
+    for (const g of groups) {
+      const gQtys = this._modQuantities[g.id] || {};
+      for (const o of (g.options || [])) {
+        const qty = gQtys[o.id] || 0;
+        totalUnits += qty;
+        totalAdjustment += qty * (parseFloat(o.price_adjustment) || 0);
+      }
+    }
+
+    // Verificar válido: cada grupo required tiene al menos 1 unidad
+    const allValid = groups.every(g => {
+      if (!g.required) return true;
+      const gQtys = this._modQuantities[g.id] || {};
+      const groupTotal = Object.values(gQtys).reduce((s, q) => s + q, 0);
+      return groupTotal > 0;
+    });
+
+    modal.innerHTML = `
+      <div class="modal-content" style="max-width:460px">
+        <div class="modal-header">
+          <h3 class="modal-title">${product.category_icon || '🍽️'} ${product.name}</h3>
+          <button class="modal-close" onclick="POS.closeModifierModal()">✕</button>
+        </div>
+        <div style="padding:16px;max-height:60vh;overflow-y:auto">
+          ${groups.map(g => {
+            const opts = (g.options || []).filter(o => o.available !== false);
+            const gQtys = this._modQuantities[g.id] || {};
+            const groupTotal = Object.values(gQtys).reduce((s, q) => s + q, 0);
+            return `
+            <div style="margin-bottom:16px">
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px">
+                <span style="font-weight:700;font-size:0.95rem">${g.name}</span>
+                ${g.required ? '<span style="font-size:0.7rem;background:var(--color-danger);color:#fff;padding:1px 6px;border-radius:8px">Requerido</span>' : '<span style="font-size:0.7rem;color:var(--text-muted)">(Opcional)</span>'}
+                <span style="margin-left:auto;font-size:0.8rem;color:var(--text-muted)">${groupTotal} selec.</span>
+              </div>
+              <div class="pos-mod-options-list">
+                ${opts.map(o => {
+                  const qty = gQtys[o.id] || 0;
+                  const adj = parseFloat(o.price_adjustment) || 0;
+                  return `
+                  <div class="pos-mod-option-row ${qty > 0 ? 'active' : ''}">
+                    <div class="pos-mod-option-info">
+                      <span class="pos-mod-option-name">${o.name}</span>
+                      ${adj > 0 ? `<span class="pos-mod-option-price">+$${adj.toFixed(2)} c/u</span>` : '<span class="pos-mod-option-price">sin cargo</span>'}
+                    </div>
+                    <div class="pos-mod-qty-control">
+                      <button type="button" class="pos-mod-qty-btn" ${qty <= 0 ? 'disabled' : ''}
+                              onclick="POS.changeModQty(${g.id}, ${o.id}, -1)">−</button>
+                      <span class="pos-mod-qty-value ${qty > 0 ? 'has-qty' : ''}">${qty}</span>
+                      <button type="button" class="pos-mod-qty-btn"
+                              onclick="POS.changeModQty(${g.id}, ${o.id}, 1)">+</button>
+                    </div>
+                  </div>
+                `}).join('')}
+              </div>
+            </div>
+          `}).join('')}
+        </div>
+        <div style="padding:12px 16px;border-top:1px solid var(--border-color);display:flex;align-items:center;justify-content:space-between">
+          <div>
+            <span style="font-size:0.8rem;color:var(--text-secondary)">Total:</span>
+            <span style="font-size:1.1rem;font-weight:700;color:var(--color-success);margin-left:4px">${totalUnits} uds</span>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-secondary" onclick="POS.closeModifierModal()">Cancelar</button>
+            <button class="btn btn-primary" onclick="POS.confirmModifiers()" ${(!allValid || totalUnits === 0) ? 'disabled title="Selecciona al menos una opción"' : ''}>
+              ✅ Agregar${totalUnits > 0 ? ` (${totalUnits})` : ''}
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  },
+
+  /**
+   * Cambia la cantidad de una opción de modificador (+1 o -1)
+   */
+  changeModQty(groupId, optionId, delta) {
+    if (!this._modQuantities[groupId]) this._modQuantities[groupId] = {};
+    const current = this._modQuantities[groupId][optionId] || 0;
+    const newQty = Math.max(0, current + delta);
+    this._modQuantities[groupId][optionId] = newQty;
+    this._renderModifierModal();
+  },
+
+  /**
+   * Confirma los modificadores y agrega al carrito
+   */
+  confirmModifiers() {
+    const product = this._pendingModProduct;
+    if (!product) return;
+
+    const groups = product.modifier_groups;
+
+    // Recopilar todas las opciones con qty > 0
+    const entries = [];
+    for (const g of groups) {
+      const gQtys = this._modQuantities[g.id] || {};
+      for (const o of (g.options || [])) {
+        const qty = gQtys[o.id] || 0;
+        if (qty > 0) {
+          entries.push({
+            name: o.name,
+            qty,
+            priceAdj: parseFloat(o.price_adjustment) || 0,
+          });
+        }
+      }
+    }
+
+    if (entries.length === 0) return;
+
+    // Agregar una línea al carrito por cada opción con su cantidad
+    for (const entry of entries) {
+      this._addProductToCartWithQty(product, entry.name, entry.priceAdj, entry.qty);
+    }
+
+    this.closeModifierModal();
+  },
+
+  closeModifierModal() {
+    const modal = document.getElementById('pos-modifier-modal');
+    if (modal) modal.classList.remove('active');
+    this._pendingModProduct = null;
+    this._modQuantities = {};
   },
 
   /**
@@ -928,6 +1127,7 @@ const POS = {
           taxRate: item.taxRate,
           quantity: item.quantity,
           trackStock: item.trackStock,
+          modifiers: item.modifiers || '',
         })),
         orderType: 'dine_in',
         tableId: this.currentTable.id,
@@ -973,6 +1173,7 @@ const POS = {
           taxRate: item.taxRate,
           quantity: item.quantity,
           trackStock: item.trackStock,
+          modifiers: item.modifiers || '',
         })),
       };
 
@@ -1049,6 +1250,7 @@ const POS = {
             taxRate: item.taxRate,
             quantity: item.quantity,
             trackStock: item.trackStock,
+            modifiers: item.modifiers || '',
           })),
           orderType: 'takeaway',
           paymentMethod: this.paymentMethod,

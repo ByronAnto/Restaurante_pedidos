@@ -228,6 +228,25 @@ const autoBootstrap = async () => {
                 active BOOLEAN DEFAULT true, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )`);
 
+            // Modificadores de productos (ej: Empanada → Verde, Queso, Carne, Pollo)
+            await client.query(`CREATE TABLE IF NOT EXISTS modifier_groups (
+                id SERIAL PRIMARY KEY, product_id INT REFERENCES products(id) ON DELETE CASCADE,
+                name VARCHAR(100) NOT NULL, required BOOLEAN DEFAULT true,
+                max_select INT DEFAULT 1, display_order INT DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )`);
+            await client.query(`CREATE TABLE IF NOT EXISTS modifier_options (
+                id SERIAL PRIMARY KEY, modifier_group_id INT REFERENCES modifier_groups(id) ON DELETE CASCADE,
+                name VARCHAR(100) NOT NULL, price_adjustment DECIMAL(10,2) DEFAULT 0,
+                available BOOLEAN DEFAULT true, display_order INT DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )`);
+            // Guardar modificadores seleccionados en items de venta y cocina
+            await client.query(`ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS modifiers TEXT DEFAULT ''`);
+            await client.query(`ALTER TABLE kitchen_order_items ADD COLUMN IF NOT EXISTS modifiers TEXT DEFAULT ''`);
+
+            await client.query(`CREATE INDEX IF NOT EXISTS idx_modifier_groups_product ON modifier_groups(product_id)`);
+            await client.query(`CREATE INDEX IF NOT EXISTS idx_modifier_options_group ON modifier_options(modifier_group_id)`);
             await client.query(`CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id)`);
             await client.query(`CREATE INDEX IF NOT EXISTS idx_sales_user ON sales(user_id)`);
             await client.query(`CREATE INDEX IF NOT EXISTS idx_sales_date ON sales(created_at)`);

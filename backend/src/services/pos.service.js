@@ -78,9 +78,9 @@ class PosService {
             // Insertar items
             for (const item of processedItems) {
                 await client.query(
-                    `INSERT INTO sale_items (sale_id, product_id, product_name, quantity, unit_price, tax_rate, subtotal)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-                    [sale.id, item.productId, item.productName, item.quantity, item.unitPrice, item.taxRate, item.subtotal.toFixed(2)]
+                    `INSERT INTO sale_items (sale_id, product_id, product_name, quantity, unit_price, tax_rate, subtotal, modifiers)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+                    [sale.id, item.productId, item.productName, item.quantity, item.unitPrice, item.taxRate, item.subtotal.toFixed(2), item.modifiers || '']
                 );
 
                 // Actualizar stock si aplica
@@ -112,9 +112,9 @@ class PosService {
             // Items de cocina
             for (const item of processedItems) {
                 await client.query(
-                    `INSERT INTO kitchen_order_items (kitchen_order_id, product_name, quantity, notes)
-           VALUES ($1, $2, $3, $4)`,
-                    [kitchenOrderId, item.productName, item.quantity, item.notes || '']
+                    `INSERT INTO kitchen_order_items (kitchen_order_id, product_name, quantity, notes, modifiers)
+           VALUES ($1, $2, $3, $4, $5)`,
+                    [kitchenOrderId, item.productName, item.quantity, item.notes || '', item.modifiers || '']
                 );
             }
 
@@ -147,7 +147,8 @@ class PosService {
                     'quantity', si.quantity,
                     'unit_price', si.unit_price,
                     'tax_rate', si.tax_rate,
-                    'subtotal', si.subtotal
+                    'subtotal', si.subtotal,
+                    'modifiers', si.modifiers
                 )) FILTER (WHERE si.id IS NOT NULL), '[]') as items
             FROM sales s
             LEFT JOIN tables t ON s.table_id = t.id
@@ -188,9 +189,9 @@ class PosService {
             // Insertar items
             for (const item of processedItems) {
                 await client.query(
-                    `INSERT INTO sale_items (sale_id, product_id, product_name, quantity, unit_price, tax_rate, subtotal)
-                     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-                    [saleId, item.productId, item.productName, item.quantity, item.unitPrice, item.taxRate, item.subtotal.toFixed(2)]
+                    `INSERT INTO sale_items (sale_id, product_id, product_name, quantity, unit_price, tax_rate, subtotal, modifiers)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+                    [saleId, item.productId, item.productName, item.quantity, item.unitPrice, item.taxRate, item.subtotal.toFixed(2), item.modifiers || '']
                 );
 
                 if (item.trackStock) {
@@ -225,9 +226,9 @@ class PosService {
 
             for (const item of processedItems) {
                 await client.query(
-                    `INSERT INTO kitchen_order_items (kitchen_order_id, product_name, quantity, notes)
-                     VALUES ($1, $2, $3, $4)`,
-                    [kitchenOrderId, item.productName, item.quantity, item.notes || '']
+                    `INSERT INTO kitchen_order_items (kitchen_order_id, product_name, quantity, notes, modifiers)
+                     VALUES ($1, $2, $3, $4, $5)`,
+                    [kitchenOrderId, item.productName, item.quantity, item.notes || '', item.modifiers || '']
                 );
             }
 
