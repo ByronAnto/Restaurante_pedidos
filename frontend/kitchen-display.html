@@ -2,73 +2,130 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>🍽️ Comandera Digital - RestaurantePOS</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>👨‍🍳</text></svg>">
     <link rel="stylesheet" href="/assets/css/global.css">
-    <link rel="stylesheet" href="/assets/css/components.css">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { background: var(--bg-primary); color: var(--text-primary); font-family: var(--font-family); overflow: hidden; }
+        html, body { height: 100%; overflow: hidden; touch-action: manipulation; }
+        body {
+            background: var(--bg-primary); color: var(--text-primary);
+            font-family: var(--font-primary, 'Inter', sans-serif);
+            display: flex; flex-direction: column;
+        }
 
-        /* ── Header ── */
-        .kitchen-header {
+        /* ═══════════════════════════════════════════════
+           HEADER
+           ═══════════════════════════════════════════════ */
+        .kd-header {
             display: flex; justify-content: space-between; align-items: center;
-            padding: 12px 24px; background: var(--bg-secondary);
+            padding: 8px 16px; background: var(--bg-secondary);
             border-bottom: 2px solid var(--accent-primary);
+            flex-shrink: 0; min-height: 52px; gap: 8px;
         }
-        .kitchen-header h1 { font-size: 1.3rem; font-weight: 800; }
-        .kitchen-header-right { display: flex; align-items: center; gap: 16px; }
-        .kitchen-stats { display: flex; gap: 12px; }
-        .kitchen-stat {
-            display: flex; align-items: center; gap: 6px;
-            padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 700;
+        .kd-header-left { display: flex; align-items: center; gap: 10px; }
+        .kd-header h1 { font-size: 1.1rem; font-weight: 800; white-space: nowrap; }
+        .kd-header-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+        .kd-clock {
+            color: var(--accent-primary); font-size: 1rem; font-weight: 600;
+            font-variant-numeric: tabular-nums; white-space: nowrap;
         }
-        .stat-pending { background: rgba(239,68,68,0.15); color: #ef4444; }
-        .stat-preparing { background: rgba(245,158,11,0.15); color: #f59e0b; }
-        .stat-ready { background: rgba(16,185,129,0.15); color: #10b981; }
-        .kitchen-clock { color: var(--accent-primary); font-size: 1.1rem; font-weight: 600; font-variant-numeric: tabular-nums; }
 
-        /* ── Grid 3 columnas ── */
-        .kitchen-grid {
-            display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;
-            padding: 12px; height: calc(100vh - 60px); overflow: hidden;
+        /* ── Stats badges ── */
+        .kd-stats { display: flex; gap: 6px; flex-wrap: wrap; }
+        .kd-stat {
+            display: flex; align-items: center; gap: 4px;
+            padding: 4px 10px; border-radius: 20px; font-size: 0.78rem; font-weight: 700;
+            white-space: nowrap;
         }
-        .kitchen-col {
+        .kd-stat-pending { background: rgba(239,68,68,0.15); color: #ef4444; }
+        .kd-stat-preparing { background: rgba(245,158,11,0.15); color: #f59e0b; }
+        .kd-stat-ready { background: rgba(16,185,129,0.15); color: #10b981; }
+
+        /* ── Toolbar buttons ── */
+        .kd-toolbar { display: flex; gap: 6px; }
+        .kd-tool-btn {
+            background: var(--bg-card); border: 1px solid var(--border-color);
+            color: var(--text-secondary); border-radius: 8px; padding: 6px 10px;
+            font-size: 1rem; cursor: pointer; transition: all 0.2s;
+            display: flex; align-items: center; justify-content: center;
+            min-width: 38px; min-height: 38px;
+        }
+        .kd-tool-btn:active, .kd-tool-btn.active { background: var(--accent-primary); color: #000; border-color: var(--accent-primary); }
+        .kd-tool-btn:hover { background: var(--bg-card-hover); }
+
+        /* ═══════════════════════════════════════════════
+           TAB BAR (visible on tablet portrait & mobile)
+           ═══════════════════════════════════════════════ */
+        .kd-tabs {
+            display: none; /* shown via media query */
+            background: var(--bg-secondary); padding: 6px 8px; gap: 6px;
+            flex-shrink: 0; border-bottom: 1px solid var(--border-color);
+        }
+        .kd-tab {
+            flex: 1; padding: 10px 8px; border-radius: 10px; border: 2px solid transparent;
+            background: var(--bg-card); color: var(--text-secondary);
+            font-weight: 700; font-size: 0.85rem; text-align: center; cursor: pointer;
+            transition: all 0.2s; min-height: 44px;
+            display: flex; align-items: center; justify-content: center; gap: 6px;
+        }
+        .kd-tab:active { transform: scale(0.96); }
+        .kd-tab.active { border-color: var(--accent-primary); color: var(--text-primary); background: rgba(245,158,11,0.1); }
+        .kd-tab .kd-tab-count {
+            background: rgba(255,255,255,0.12); padding: 2px 8px; border-radius: 12px;
+            font-size: 0.75rem; min-width: 24px;
+        }
+        .kd-tab.tab-pending.active { border-color: #ef4444; background: rgba(239,68,68,0.1); }
+        .kd-tab.tab-pending .kd-tab-count { background: rgba(239,68,68,0.2); color: #ef4444; }
+        .kd-tab.tab-preparing.active { border-color: #f59e0b; background: rgba(245,158,11,0.1); }
+        .kd-tab.tab-preparing .kd-tab-count { background: rgba(245,158,11,0.2); color: #f59e0b; }
+        .kd-tab.tab-ready.active { border-color: #10b981; background: rgba(16,185,129,0.1); }
+        .kd-tab.tab-ready .kd-tab-count { background: rgba(16,185,129,0.2); color: #10b981; }
+
+        /* ═══════════════════════════════════════════════
+           GRID — 3 columnas (desktop / landscape)
+           ═══════════════════════════════════════════════ */
+        .kd-grid {
+            display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;
+            padding: 10px; flex: 1; overflow: hidden;
+        }
+        .kd-col {
             overflow-y: auto; background: var(--bg-card); border-radius: 12px;
-            padding: 10px; border: 1px solid var(--border-color);
-            scrollbar-width: thin;
+            padding: 8px; border: 1px solid var(--border-color);
+            -webkit-overflow-scrolling: touch; scrollbar-width: thin;
         }
-        .kitchen-col::-webkit-scrollbar { width: 6px; }
-        .kitchen-col::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
+        .kd-col::-webkit-scrollbar { width: 4px; }
+        .kd-col::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 2px; }
 
-        .kitchen-col-title {
-            text-align: center; padding: 10px; margin-bottom: 8px;
-            font-weight: 700; font-size: 1rem; border-radius: 8px;
+        .kd-col-title {
+            text-align: center; padding: 8px; margin-bottom: 6px;
+            font-weight: 700; font-size: 0.92rem; border-radius: 8px;
             position: sticky; top: 0; z-index: 2;
         }
-        .col-pending .kitchen-col-title { background: rgba(239,68,68,0.15); color: #ef4444; }
-        .col-preparing .kitchen-col-title { background: rgba(245,158,11,0.15); color: #f59e0b; }
-        .col-ready .kitchen-col-title { background: rgba(16,185,129,0.15); color: #10b981; }
+        .col-pending .kd-col-title { background: rgba(239,68,68,0.15); color: #ef4444; }
+        .col-preparing .kd-col-title { background: rgba(245,158,11,0.15); color: #f59e0b; }
+        .col-ready .kd-col-title { background: rgba(16,185,129,0.15); color: #10b981; }
 
-        /* ── Order Card ── */
+        /* ═══════════════════════════════════════════════
+           ORDER CARD
+           ═══════════════════════════════════════════════ */
         .order-card {
             background: var(--bg-secondary); border: 1px solid var(--border-color);
             border-radius: 10px; padding: 12px; margin-bottom: 8px;
             border-left: 4px solid var(--accent-primary);
-            animation: fadeIn 0.3s ease;
-            transition: box-shadow 0.2s;
+            animation: fadeIn 0.3s ease; transition: box-shadow 0.2s;
         }
-        .order-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
         .order-card.takeaway { border-left-color: #fb923c; }
         .order-card.urgent { border-left-color: #ef4444; animation: urgentPulse 1.5s infinite; }
 
-        .order-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-        .order-number { font-weight: 800; font-size: 1rem; color: var(--accent-primary); }
+        .order-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 4px; }
+        .order-number { font-weight: 800; font-size: 1.05rem; color: var(--accent-primary); }
         .order-card.takeaway .order-number { color: #fb923c; }
-        .order-meta { display: flex; align-items: center; gap: 8px; }
+        .order-meta { display: flex; align-items: center; gap: 6px; }
         .order-time { font-size: 0.75rem; color: var(--text-muted); }
         .order-elapsed {
-            font-size: 0.7rem; font-weight: 700; padding: 2px 8px;
+            font-size: 0.72rem; font-weight: 700; padding: 2px 8px;
             border-radius: 10px; font-variant-numeric: tabular-nums;
         }
         .elapsed-ok { background: rgba(16,185,129,0.15); color: #10b981; }
@@ -76,75 +133,164 @@
         .elapsed-danger { background: rgba(239,68,68,0.15); color: #ef4444; }
 
         .order-type-badge {
-            display: inline-block; font-size: 0.7rem; font-weight: 700;
-            padding: 2px 8px; border-radius: 4px; margin-bottom: 6px;
+            display: inline-block; font-size: 0.72rem; font-weight: 700;
+            padding: 3px 10px; border-radius: 4px; margin-bottom: 6px;
         }
         .badge-dinein { background: #10b981; color: white; }
         .badge-takeaway { background: #fb923c; color: white; }
 
         .order-items { list-style: none; padding: 0; margin: 0 0 10px; }
-        .order-items li { padding: 4px 0; font-size: 0.88rem; border-bottom: 1px dashed var(--border-color); }
+        .order-items li { padding: 5px 0; font-size: 0.9rem; border-bottom: 1px dashed var(--border-color); }
         .order-items li:last-child { border-bottom: none; }
-        .order-items .item-qty { font-weight: 800; color: var(--accent-primary); margin-right: 4px; }
-        .order-items .item-notes { display: block; font-size: 0.75rem; color: var(--text-muted); font-style: italic; margin-left: 20px; }
+        .order-items .item-qty { font-weight: 800; color: var(--accent-primary); margin-right: 6px; }
+        .order-items .item-mods { display: block; margin-left: 28px; font-size: 0.82rem; color: #3b82f6; font-weight: 600; font-style: italic; }
+        .order-items .item-notes { display: block; font-size: 0.78rem; color: var(--text-muted); font-style: italic; margin-left: 28px; }
 
-        .order-notes { font-size: 0.78rem; color: var(--text-muted); margin-bottom: 8px; padding: 4px 8px; background: var(--bg-primary); border-radius: 6px; }
-
-        .order-btn {
-            width: 100%; padding: 10px; border: none; border-radius: 8px;
-            font-weight: 700; cursor: pointer; font-size: 0.9rem;
-            transition: all 0.2s; text-transform: uppercase; letter-spacing: 0.5px;
+        .order-notes {
+            font-size: 0.8rem; color: var(--text-muted); margin-bottom: 8px;
+            padding: 6px 10px; background: var(--bg-primary); border-radius: 6px;
         }
-        .order-btn:hover { transform: translateY(-1px); box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
-        .order-btn:active { transform: translateY(0); }
+
+        /* ── Action button (big touch target) ── */
+        .order-btn {
+            width: 100%; padding: 14px; border: none; border-radius: 10px;
+            font-weight: 700; cursor: pointer; font-size: 0.95rem;
+            transition: all 0.15s; text-transform: uppercase; letter-spacing: 0.5px;
+            min-height: 48px; /* touch-friendly */
+        }
+        .order-btn:active { transform: scale(0.97); opacity: 0.9; }
         .btn-prepare { background: linear-gradient(135deg, #f59e0b, #d97706); color: #000; }
         .btn-ready { background: linear-gradient(135deg, #10b981, #059669); color: #fff; }
         .btn-deliver { background: linear-gradient(135deg, #3b82f6, #2563eb); color: #fff; }
 
         .empty-msg {
-            text-align: center; padding: 60px 16px; color: var(--text-muted);
+            text-align: center; padding: 40px 16px; color: var(--text-muted);
             font-size: 0.9rem; opacity: 0.6;
         }
-        .empty-msg .empty-icon { font-size: 2.5rem; margin-bottom: 8px; }
+        .empty-msg .empty-icon { font-size: 2.2rem; margin-bottom: 8px; }
 
-        /* ── Notification flash ── */
+        /* ═══════════════════════════════════════════════
+           NOTIFICATION
+           ═══════════════════════════════════════════════ */
         .new-order-flash {
             position: fixed; top: 0; left: 0; right: 0; z-index: 999;
             background: linear-gradient(135deg, #10b981, #059669);
-            color: white; text-align: center; padding: 12px;
+            color: white; text-align: center; padding: 14px;
             font-weight: 700; font-size: 1.1rem;
-            animation: flashSlide 3s forwards;
+            animation: flashSlide 3.5s forwards;
         }
 
+        /* ═══════════════════════════════════════════════
+           RESPONSIVE — Tablet Portrait (≤ 1024px)
+           9" tablet portrait ≈ 600-768px
+           10" tablet portrait ≈ 768-834px
+           Both landscape ≈ 1024-1194px
+           ═══════════════════════════════════════════════ */
+
+        /* Tablet landscape: keep 3 cols but tighter */
+        @media (max-width: 1100px) {
+            .kd-grid { gap: 8px; padding: 8px; }
+            .kd-col { padding: 6px; }
+            .order-card { padding: 10px; }
+            .kd-header h1 { font-size: 1rem; }
+        }
+
+        /* Tablet portrait: switch to tabs + single column */
+        @media (max-width: 860px) {
+            .kd-tabs { display: flex; }
+            .kd-grid {
+                grid-template-columns: 1fr;
+                overflow-y: auto; padding: 8px;
+                -webkit-overflow-scrolling: touch;
+            }
+            .kd-col { display: none; }
+            .kd-col.active { display: block; }
+            .kd-col-title { display: none; } /* tabs already show the title */
+            .kd-header { padding: 6px 12px; min-height: 46px; }
+            .kd-header h1 { font-size: 0.95rem; }
+            .kd-stats { display: none; } /* stats shown in tabs */
+            .order-card { padding: 12px; margin-bottom: 10px; }
+            .order-btn { padding: 16px; font-size: 1rem; min-height: 52px; }
+            .order-items li { padding: 6px 0; font-size: 0.92rem; }
+        }
+
+        /* Small portrait (phone / small 8" tablet) */
+        @media (max-width: 600px) {
+            .kd-header { flex-wrap: wrap; padding: 6px 8px; gap: 4px; }
+            .kd-header h1 { font-size: 0.88rem; }
+            .kd-toolbar { gap: 4px; }
+            .kd-tool-btn { min-width: 34px; min-height: 34px; font-size: 0.9rem; padding: 4px 8px; }
+            .kd-tabs { padding: 4px 6px; gap: 4px; }
+            .kd-tab { font-size: 0.78rem; padding: 8px 4px; min-height: 40px; }
+            .kd-grid { padding: 6px; }
+            .order-number { font-size: 0.95rem; }
+        }
+
+        /* ═══════════════════════════════════════════════
+           ANIMATIONS
+           ═══════════════════════════════════════════════ */
         @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes urgentPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); } 50% { box-shadow: 0 0 0 6px rgba(239,68,68,0.15); } }
+        @keyframes urgentPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); } 50% { box-shadow: 0 0 0 8px rgba(239,68,68,0.15); } }
         @keyframes flashSlide { 0% { transform: translateY(-100%); } 10% { transform: translateY(0); } 85% { transform: translateY(0); } 100% { transform: translateY(-100%); } }
     </style>
 </head>
 <body>
-    <div class="kitchen-header">
-        <h1>👨‍🍳 Comandera Digital</h1>
-        <div class="kitchen-header-right">
-            <div class="kitchen-stats" id="kitchen-stats"></div>
-            <div class="kitchen-clock" id="clock"></div>
+
+    <!-- ═══ HEADER ═══ -->
+    <header class="kd-header">
+        <div class="kd-header-left">
+            <h1>👨‍🍳 Comandera</h1>
+            <div class="kd-stats" id="kd-stats"></div>
+        </div>
+        <div class="kd-header-right">
+            <div class="kd-clock" id="clock"></div>
+            <div class="kd-toolbar">
+                <button class="kd-tool-btn" id="btn-sound" onclick="toggleSound()" title="Sonido">🔔</button>
+                <button class="kd-tool-btn" id="btn-fullscreen" onclick="toggleFullscreen()" title="Pantalla completa">⛶</button>
+                <button class="kd-tool-btn" onclick="window.location.href='/'" title="Ir al POS">🏠</button>
+            </div>
+        </div>
+    </header>
+
+    <!-- ═══ TAB BAR (tablet portrait / mobile) ═══ -->
+    <div class="kd-tabs" id="kd-tabs">
+        <div class="kd-tab tab-pending active" data-col="pending" onclick="switchTab('pending')">
+            🔴 Pendientes <span class="kd-tab-count" id="tab-count-pending">0</span>
+        </div>
+        <div class="kd-tab tab-preparing" data-col="preparing" onclick="switchTab('preparing')">
+            🟡 Preparando <span class="kd-tab-count" id="tab-count-preparing">0</span>
+        </div>
+        <div class="kd-tab tab-ready" data-col="ready" onclick="switchTab('ready')">
+            🟢 Listos <span class="kd-tab-count" id="tab-count-ready">0</span>
         </div>
     </div>
-    <div class="kitchen-grid" id="kitchen-grid">
-        <div class="kitchen-col col-pending"><div class="kitchen-col-title">🔴 Pendientes (0)</div><div class="empty-msg"><div class="empty-icon">✨</div>Cargando...</div></div>
-        <div class="kitchen-col col-preparing"><div class="kitchen-col-title">🟡 Preparando (0)</div><div class="empty-msg"><div class="empty-icon">👨‍🍳</div>Cargando...</div></div>
-        <div class="kitchen-col col-ready"><div class="kitchen-col-title">🟢 Listos (0)</div><div class="empty-msg"><div class="empty-icon">🍽️</div>Cargando...</div></div>
+
+    <!-- ═══ GRID ═══ -->
+    <div class="kd-grid" id="kd-grid">
+        <div class="kd-col col-pending active" id="col-pending"></div>
+        <div class="kd-col col-preparing" id="col-preparing"></div>
+        <div class="kd-col col-ready" id="col-ready"></div>
     </div>
+
     <div id="notification-area"></div>
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
+        /* ═══════════════════════════════════════════════
+           STATE
+           ═══════════════════════════════════════════════ */
         const API_BASE = window.location.origin + '/api';
-        // Token: try from opener, then from own localStorage (same origin)
         const token = (window.opener && window.opener.localStorage)
             ? window.opener.localStorage.getItem('token')
             : localStorage.getItem('token');
 
-        // ── Fetch orders ──
+        let activeTab = 'pending';
+        let soundEnabled = true;
+        let allOrders = [];
+
+        /* ═══════════════════════════════════════════════
+           FETCH
+           ═══════════════════════════════════════════════ */
         async function fetchOrders() {
             try {
                 const res = await fetch(API_BASE + '/kitchen/orders/active', {
@@ -155,47 +301,59 @@
             } catch (e) { console.error('Error fetching orders:', e); return []; }
         }
 
-        // ── Elapsed time helper ──
+        /* ═══════════════════════════════════════════════
+           ELAPSED TIME
+           ═══════════════════════════════════════════════ */
         function getElapsed(createdAt) {
             const diff = Math.floor((Date.now() - new Date(createdAt).getTime()) / 60000);
-            if (diff < 1) return { text: '<1 min', cls: 'elapsed-ok' };
+            if (diff < 1)  return { text: '<1 min', cls: 'elapsed-ok' };
             if (diff < 10) return { text: diff + ' min', cls: 'elapsed-ok' };
             if (diff < 20) return { text: diff + ' min', cls: 'elapsed-warn' };
             return { text: diff + ' min', cls: 'elapsed-danger' };
         }
 
-        // ── Render ──
+        /* ═══════════════════════════════════════════════
+           RENDER
+           ═══════════════════════════════════════════════ */
         function renderOrders(orders) {
-            const pending = orders.filter(o => o.status === 'pending');
+            allOrders = orders;
+            const pending   = orders.filter(o => o.status === 'pending');
             const preparing = orders.filter(o => o.status === 'preparing');
-            const ready = orders.filter(o => o.status === 'ready');
+            const ready     = orders.filter(o => o.status === 'ready');
 
-            // Stats
-            document.getElementById('kitchen-stats').innerHTML =
-                '<div class="kitchen-stat stat-pending">🔴 ' + pending.length + '</div>' +
-                '<div class="kitchen-stat stat-preparing">🟡 ' + preparing.length + '</div>' +
-                '<div class="kitchen-stat stat-ready">🟢 ' + ready.length + '</div>';
+            // Header stats
+            document.getElementById('kd-stats').innerHTML =
+                '<div class="kd-stat kd-stat-pending">🔴 ' + pending.length + '</div>' +
+                '<div class="kd-stat kd-stat-preparing">🟡 ' + preparing.length + '</div>' +
+                '<div class="kd-stat kd-stat-ready">🟢 ' + ready.length + '</div>';
 
-            document.getElementById('kitchen-grid').innerHTML =
-                renderColumn('🔴 Pendientes', pending, 'preparing', 'col-pending', 'btn-prepare', '👨‍🍳 Preparar') +
-                renderColumn('🟡 Preparando', preparing, 'ready', 'col-preparing', 'btn-ready', '✅ Listo') +
-                renderColumn('🟢 Listos', ready, 'delivered', 'col-ready', 'btn-deliver', '🍽️ Entregado');
+            // Tab counts
+            document.getElementById('tab-count-pending').textContent = pending.length;
+            document.getElementById('tab-count-preparing').textContent = preparing.length;
+            document.getElementById('tab-count-ready').textContent = ready.length;
+
+            // Columns
+            renderColumn('col-pending',   '🔴 Pendientes',  pending,   'preparing', 'btn-prepare', '👨‍🍳 Preparar');
+            renderColumn('col-preparing',  '🟡 Preparando',  preparing, 'ready',     'btn-ready',   '✅ Listo');
+            renderColumn('col-ready',      '🟢 Listos',      ready,     'delivered', 'btn-deliver',  '🍽️ Entregado');
         }
 
-        function renderColumn(title, orders, nextStatus, colClass, btnClass, btnLabel) {
+        function renderColumn(colId, title, orders, nextStatus, btnClass, btnLabel) {
             const emptyIcons = { 'col-pending': '✨', 'col-preparing': '👨‍🍳', 'col-ready': '🍽️' };
-            const emptyMsgs = { 'col-pending': 'Sin pedidos pendientes', 'col-preparing': 'Nada en preparación', 'col-ready': 'Sin pedidos listos' };
-            return '<div class="kitchen-col ' + colClass + '">' +
-                '<div class="kitchen-col-title">' + title + ' (' + orders.length + ')</div>' +
+            const emptyMsgs  = { 'col-pending': 'Sin pedidos pendientes', 'col-preparing': 'Nada en preparación', 'col-ready': 'Sin pedidos listos' };
+            const el = document.getElementById(colId);
+            if (!el) return;
+
+            el.innerHTML =
+                '<div class="kd-col-title">' + title + ' (' + orders.length + ')</div>' +
                 (orders.length === 0
-                    ? '<div class="empty-msg"><div class="empty-icon">' + (emptyIcons[colClass]||'') + '</div>' + (emptyMsgs[colClass]||'Sin órdenes') + '</div>'
-                    : orders.map(function(o) { return renderCard(o, nextStatus, btnClass, btnLabel); }).join('')) +
-            '</div>';
+                    ? '<div class="empty-msg"><div class="empty-icon">' + (emptyIcons[colId] || '') + '</div>' + (emptyMsgs[colId] || 'Sin órdenes') + '</div>'
+                    : orders.map(function(o) { return renderCard(o, nextStatus, btnClass, btnLabel); }).join(''));
         }
 
         function renderCard(o, nextStatus, btnClass, btnLabel) {
             var items = o.items || [];
-            var time = new Date(o.created_at).toLocaleTimeString('es-EC', {hour:'2-digit',minute:'2-digit'});
+            var time = new Date(o.created_at).toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' });
             var elapsed = getElapsed(o.created_at);
             var isTakeaway = (o.order_type === 'takeaway');
             var typeLabel = isTakeaway ? '📦 Para Llevar' : '🏠 ' + (o.table_name || 'Mesa');
@@ -212,9 +370,9 @@
                 '</div>' +
                 '<span class="order-type-badge ' + badgeClass + '">' + typeLabel + '</span>' +
                 '<ul class="order-items">' +
-                    items.filter(function(i){return i.id;}).map(function(i) {
+                    items.filter(function(i) { return i.id; }).map(function(i) {
                         return '<li><span class="item-qty">' + i.quantity + 'x</span> ' + i.product_name +
-                            (i.modifiers ? '<div style="margin-left:28px;font-size:0.85em;color:#3b82f6;font-weight:600;font-style:italic">▸ ' + i.modifiers + '</div>' : '') +
+                            (i.modifiers ? '<div class="item-mods">▸ ' + i.modifiers + '</div>' : '') +
                             (i.notes ? '<span class="item-notes">📝 ' + i.notes + '</span>' : '') + '</li>';
                     }).join('') +
                 '</ul>' +
@@ -223,6 +381,9 @@
             '</div>';
         }
 
+        /* ═══════════════════════════════════════════════
+           UPDATE STATUS
+           ═══════════════════════════════════════════════ */
         async function updateStatus(orderId, status) {
             try {
                 await fetch(API_BASE + '/kitchen/orders/' + orderId + '/status', {
@@ -232,22 +393,68 @@
                 });
                 var orders = await fetchOrders();
                 renderOrders(orders);
-            } catch(e) { console.error('Error updating status:', e); }
+            } catch (e) { console.error('Error updating status:', e); }
         }
 
-        // ── Clock ──
+        /* ═══════════════════════════════════════════════
+           TAB SWITCHING (tablet portrait)
+           ═══════════════════════════════════════════════ */
+        function switchTab(tab) {
+            activeTab = tab;
+            // Update tab buttons
+            document.querySelectorAll('.kd-tab').forEach(function(t) {
+                t.classList.toggle('active', t.dataset.col === tab);
+            });
+            // Update column visibility
+            document.querySelectorAll('.kd-col').forEach(function(c) {
+                var colName = c.id.replace('col-', '');
+                c.classList.toggle('active', colName === tab);
+            });
+        }
+
+        /* ═══════════════════════════════════════════════
+           TOOLBAR ACTIONS
+           ═══════════════════════════════════════════════ */
+        function toggleSound() {
+            soundEnabled = !soundEnabled;
+            var btn = document.getElementById('btn-sound');
+            btn.textContent = soundEnabled ? '🔔' : '🔕';
+            btn.classList.toggle('active', soundEnabled);
+        }
+
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(function() {});
+            } else {
+                document.exitFullscreen().catch(function() {});
+            }
+        }
+
+        // Update fullscreen button icon
+        document.addEventListener('fullscreenchange', function() {
+            document.getElementById('btn-fullscreen').textContent = document.fullscreenElement ? '⊠' : '⛶';
+        });
+
+        /* ═══════════════════════════════════════════════
+           CLOCK
+           ═══════════════════════════════════════════════ */
         function updateClock() {
-            document.getElementById('clock').textContent = new Date().toLocaleTimeString('es-EC', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+            document.getElementById('clock').textContent =
+                new Date().toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         }
         setInterval(updateClock, 1000);
         updateClock();
 
-        // ── Auto-refresh elapsed times every 30s ──
+        /* ═══════════════════════════════════════════════
+           AUTO-REFRESH (every 30s)
+           ═══════════════════════════════════════════════ */
         setInterval(function() {
             fetchOrders().then(renderOrders);
         }, 30000);
 
-        // ── Socket.IO ──
+        /* ═══════════════════════════════════════════════
+           SOCKET.IO
+           ═══════════════════════════════════════════════ */
         var socket = io();
         socket.emit('join-kitchen');
 
@@ -257,10 +464,22 @@
             notif.className = 'new-order-flash';
             notif.textContent = '🆕 Nueva orden: ' + (data.saleNumber || 'Nuevo pedido');
             document.getElementById('notification-area').appendChild(notif);
-            setTimeout(function(){ notif.remove(); }, 3500);
+            setTimeout(function() { notif.remove(); }, 3500);
 
-            // Play sound if available
-            try { new Audio('data:audio/wav;base64,UklGRl9vT19teleXQAIABAAAA...').play(); } catch(e){}
+            // Sound notification
+            if (soundEnabled) {
+                try {
+                    var ctx = new (window.AudioContext || window.webkitAudioContext)();
+                    var osc = ctx.createOscillator();
+                    var gain = ctx.createGain();
+                    osc.connect(gain); gain.connect(ctx.destination);
+                    osc.frequency.value = 800;
+                    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+                    osc.start(ctx.currentTime);
+                    osc.stop(ctx.currentTime + 0.5);
+                } catch(e) {}
+            }
 
             fetchOrders().then(renderOrders);
         });
@@ -269,7 +488,36 @@
             fetchOrders().then(renderOrders);
         });
 
-        // ── Initial load ──
+        /* ═══════════════════════════════════════════════
+           SWIPE SUPPORT (tablet)
+           ═══════════════════════════════════════════════ */
+        (function() {
+            var startX = 0, startY = 0;
+            var grid = document.getElementById('kd-grid');
+            var tabs = ['pending', 'preparing', 'ready'];
+
+            grid.addEventListener('touchstart', function(e) {
+                startX = e.touches[0].clientX;
+                startY = e.touches[0].clientY;
+            }, { passive: true });
+
+            grid.addEventListener('touchend', function(e) {
+                var dx = e.changedTouches[0].clientX - startX;
+                var dy = e.changedTouches[0].clientY - startY;
+                // Only horizontal swipe (ignore vertical scrolling)
+                if (Math.abs(dx) < 60 || Math.abs(dy) > Math.abs(dx)) return;
+                // Only in tablet mode (tabs visible)
+                if (window.getComputedStyle(document.getElementById('kd-tabs')).display === 'none') return;
+
+                var idx = tabs.indexOf(activeTab);
+                if (dx < 0 && idx < tabs.length - 1) switchTab(tabs[idx + 1]); // swipe left → next
+                if (dx > 0 && idx > 0) switchTab(tabs[idx - 1]); // swipe right → prev
+            }, { passive: true });
+        })();
+
+        /* ═══════════════════════════════════════════════
+           INITIAL LOAD
+           ═══════════════════════════════════════════════ */
         fetchOrders().then(renderOrders);
     </script>
 </body>

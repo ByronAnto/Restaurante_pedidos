@@ -125,6 +125,36 @@ const Config = {
           </div>
         </div>
 
+        <!-- Período / Jornada de Caja -->
+        <div class="card mb-lg">
+          <div class="card-header"><h3 class="card-title">🕐 Período de Ventas (Jornada)</h3></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-md)">
+            <div class="form-group">
+              <label class="form-label">Hora de Inicio</label>
+              <select class="form-select config-input" data-key="period_start_hour">
+                ${Array.from({length:24}, (_,i) => {
+                  const val = i.toString().padStart(2,'0');
+                  const sel = (pos.period_start_hour || '06') === val ? 'selected' : '';
+                  return '<option value="' + val + '" ' + sel + '>' + val + ':00</option>';
+                }).join('')}
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Hora de Cierre</label>
+              <select class="form-select config-input" data-key="period_end_hour">
+                ${Array.from({length:24}, (_,i) => {
+                  const val = i.toString().padStart(2,'0');
+                  const sel = (pos.period_end_hour || '22') === val ? 'selected' : '';
+                  return '<option value="' + val + '" ' + sel + '>' + val + ':00</option>';
+                }).join('')}
+              </select>
+            </div>
+          </div>
+          <p style="margin:0;padding:0 var(--space-lg) var(--space-md);font-size:0.78rem;color:var(--text-muted)">
+            📌 El POS pedirá abrir caja al inicio del período y cerrar caja al final. Cada período separa las ventas del día.
+          </p>
+        </div>
+
         <!-- ═══ MAP EDITOR ═══ -->
         <div class="card mb-lg" id="map-editor-card">
           <div class="card-header" style="flex-direction:column;align-items:flex-start;gap:4px">

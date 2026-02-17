@@ -28,6 +28,10 @@ class PosService {
         try {
             await client.query('BEGIN');
 
+            // Verificar período abierto
+            const periodRes = await client.query("SELECT id FROM sales_periods WHERE status = 'open' ORDER BY open_time DESC LIMIT 1");
+            const periodId = periodRes.rows.length > 0 ? periodRes.rows[0].id : null;
+
             // Calcular totales
             let subtotal = 0;
             let taxTotal = 0;
@@ -65,12 +69,12 @@ class PosService {
             // Insertar venta
             const saleResult = await client.query(
                 `INSERT INTO sales (user_id, sale_number, status, payment_method, subtotal, tax_total, total, 
-         amount_received, change_amount, transfer_ref, customer_name, customer_id_number, notes, order_type, table_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+         amount_received, change_amount, transfer_ref, customer_name, customer_id_number, notes, order_type, table_id, period_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
          RETURNING *`,
                 [userId, saleNumber, status, paymentMethod || 'cash', subtotal.toFixed(2), taxTotal.toFixed(2), total.toFixed(2),
                     isOpenOrder ? 0 : (amountReceived || total), changeAmount.toFixed(2), transferRef, customerName, customerIdNumber, notes,
-                    orderType || 'dine_in', tableId || null]
+                    orderType || 'dine_in', tableId || null, periodId]
             );
 
             const sale = saleResult.rows[0];
@@ -298,10 +302,19 @@ class PosService {
     /**
      * Obtiene ventas con paginación y filtros
      */
-    async getSales({ page = 1, limit = 20, startDate, endDate, status, paymentMethod }) {
+    async getSales({ page = 1, limit = 20, startDate, endDate, status, paymentMethod, periodId, userRole }) {
         let whereClause = 'WHERE 1=1';
         const params = [];
         let paramIndex = 1;
+
+        // Filtro por período
+        if (periodId) {
+            whereClause += ` AND s.period_id = $${paramIndex++}`;
+            params.push(periodId);
+        } else if (userRole && userRole !== 'admin') {
+            // Non-admin solo ve ventas del período abierto actual
+            whereClause += ` AND s.period_id = (SELECT id FROM sales_periods WHERE status = 'open' LIMIT 1)`;
+        }
 
         if (startDate) {
             whereClause += ` AND s.created_at >= $${paramIndex++}`;

@@ -63,7 +63,7 @@ class PosController {
 
     async getSales(req, res, next) {
         try {
-            const { page, limit, startDate, endDate, status, paymentMethod } = req.query;
+            const { page, limit, startDate, endDate, status, paymentMethod, periodId } = req.query;
 
             const result = await posService.getSales({
                 page: parseInt(page) || 1,
@@ -72,6 +72,8 @@ class PosController {
                 endDate,
                 status,
                 paymentMethod,
+                periodId: periodId ? parseInt(periodId) : undefined,
+                userRole: req.user.role,
             });
 
             return success(res, result);

@@ -21,6 +21,9 @@ const POS = {
   currentTable: null,
   currentOrder: null,
 
+  // Período / Jornada de caja
+  currentPeriod: null,
+
   /**
    * Inicializa el POS
    */
@@ -35,9 +38,24 @@ const POS = {
     this.orderType = null;
     this.currentTable = null;
     this.currentOrder = null;
+    this.currentPeriod = null;
+    await this.loadPeriod();
     await this.loadData();
     this.render(container);
     this.bindEvents();
+  },
+
+  /**
+   * Carga el período activo
+   */
+  async loadPeriod() {
+    try {
+      const res = await API.get('/periods/current');
+      this.currentPeriod = res.data || null;
+    } catch (err) {
+      console.error('Error cargando período:', err);
+      this.currentPeriod = null;
+    }
   },
 
   /**
@@ -83,6 +101,12 @@ const POS = {
       console.error('Container not found!');
       return;
     }
+
+    // Si no hay período abierto, mostrar pantalla de apertura de caja
+    if (!this.currentPeriod) {
+      this.renderOpenPeriod(container);
+      return;
+    }
     
     if (this.mode === 'table-map') {
       this.renderTableMap(container);
@@ -90,6 +114,57 @@ const POS = {
       this.renderOrdering(container);
       // Inicializar scroll de categorías después del render
       this.initCategoryScroll();
+    }
+  },
+
+  /**
+   * Pantalla de apertura de caja (cuando no hay período abierto)
+   */
+  renderOpenPeriod(container) {
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('es-EC', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+    container.innerHTML = `
+      <div class="floor-plan-view" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:calc(100vh - var(--header-height));">
+        <div class="card" style="max-width:480px;width:100%;padding:var(--space-xl);text-align:center;">
+          <div style="font-size:3.5rem;margin-bottom:var(--space-md);">💰</div>
+          <h2 style="margin-bottom:var(--space-xs);font-size:1.4rem;">Abrir Caja</h2>
+          <p style="color:var(--text-muted);margin-bottom:var(--space-lg);font-size:0.9rem;">${dateStr}</p>
+          
+          <div class="form-group" style="text-align:left;margin-bottom:var(--space-lg);">
+            <label class="form-label">💵 Monto Inicial en Caja (efectivo)</label>
+            <input type="number" class="form-input" id="opening-cash" value="0" min="0" step="0.01" 
+                   style="font-size:1.4rem;text-align:center;font-weight:700;" autofocus>
+            <p style="font-size:0.78rem;color:var(--text-muted);margin-top:4px;">Ingrese el dinero en efectivo con el que inicia la jornada</p>
+          </div>
+
+          <div class="form-group" style="text-align:left;margin-bottom:var(--space-lg);">
+            <label class="form-label">📝 Notas (opcional)</label>
+            <input type="text" class="form-input" id="opening-notes" placeholder="Ej: Turno mañana, etc.">
+          </div>
+
+          <button class="btn btn-primary btn-block" onclick="POS.doOpenPeriod()" style="padding:16px;font-size:1.1rem;font-weight:700;">
+            🔓 Abrir Período de Ventas
+          </button>
+        </div>
+      </div>
+    `;
+  },
+
+  /**
+   * Ejecuta la apertura de caja / período
+   */
+  async doOpenPeriod() {
+    const openingCash = parseFloat(document.getElementById('opening-cash').value) || 0;
+    const notes = document.getElementById('opening-notes')?.value || '';
+    
+    try {
+      const res = await API.post('/periods/open', { openingCash, notes });
+      this.currentPeriod = res.data;
+      Toast.success('✅ Caja abierta · $' + openingCash.toFixed(2));
+      this.render(this.container);
+    } catch (err) {
+      Toast.error(err.message || 'Error abriendo caja');
     }
   },
 
@@ -121,13 +196,24 @@ const POS = {
               <span class="fp-legend-item total">${this.tables.length} Total</span>
             </div>
           </div>
-          <button class="takeaway-btn" data-action="start-takeaway">
-            <span class="takeaway-btn-icon">🏃</span>
-            <span class="takeaway-btn-text">
-              <span class="takeaway-btn-title">PARA LLEVAR</span>
-              <span class="takeaway-btn-sub">Pedido sin mesa</span>
-            </span>
-          </button>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <button class="btn btn-sm pos-action-icon" onclick="window.open('/kitchen-display.html','ComanderaDigital','width=1200,height=800')" title="Comandera">
+              👨‍🍳
+            </button>
+            <button class="btn btn-sm pos-action-icon" onclick="POS.showWithdrawalModal()" title="Retiro de Efectivo" style="color:#f59e0b;">
+              💸
+            </button>
+            <button class="btn btn-sm pos-action-icon" onclick="POS.showClosePeriodModal()" title="Cerrar Caja" style="color:#ef4444;">
+              🔒
+            </button>
+            <button class="takeaway-btn" data-action="start-takeaway">
+              <span class="takeaway-btn-icon">🏃</span>
+              <span class="takeaway-btn-text">
+                <span class="takeaway-btn-title">PARA LLEVAR</span>
+                <span class="takeaway-btn-sub">Pedido sin mesa</span>
+              </span>
+            </button>
+          </div>
         </div>
 
         ${this.tables.length === 0 && this.zones.length === 0 ? `
@@ -1460,6 +1546,397 @@ const POS = {
     } finally {
       btn.disabled = false;
       btn.innerHTML = '<span class="pay-confirm-icon">✅</span><span class="pay-confirm-text">Procesar Venta</span>';
+    }
+  },
+
+  // ═══════════════════════════════════════════════════════
+  //  PERÍODO / JORNADA DE CAJA
+  // ═══════════════════════════════════════════════════════
+
+  /**
+   * Barra de información del período activo
+   */
+  renderPeriodBar() {
+    const p = this.currentPeriod;
+    if (!p) return '';
+    const openTime = new Date(p.open_time).toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' });
+    const sales = parseFloat(p.total_sales) || 0;
+    const orders = parseInt(p.total_orders) || 0;
+    const cash = parseFloat(p.cash_total) || 0;
+    const transfer = parseFloat(p.transfer_total) || 0;
+
+    return `
+      <div class="period-bar">
+        <div class="period-bar-left">
+          <span class="period-bar-status">🟢 Caja Abierta</span>
+          <span class="period-bar-time">desde ${openTime}</span>
+          ${p.opened_by_name ? `<span class="period-bar-user">· ${p.opened_by_name}</span>` : ''}
+        </div>
+        <div class="period-bar-right">
+          <span class="period-bar-stat">📦 ${orders}</span>
+          <span class="period-bar-stat">💵 $${cash.toFixed(2)}</span>
+          <span class="period-bar-stat">🏦 $${transfer.toFixed(2)}</span>
+          <span class="period-bar-stat period-bar-total">Total: $${sales.toFixed(2)}</span>
+        </div>
+      </div>`;
+  },
+
+  /**
+   * Modal para retiro de efectivo
+   */
+  async showWithdrawalModal() {
+    try {
+      await this.loadPeriod();
+      if (!this.currentPeriod) {
+        Toast.error('No hay período abierto');
+        return;
+      }
+
+      // Cargar retiros existentes
+      let withdrawals = [];
+      try {
+        const wRes = await API.get('/periods/withdrawals');
+        withdrawals = Array.isArray(wRes.data) ? wRes.data : [];
+      } catch(e) { /* ok */ }
+
+      const totalRetiros = withdrawals.reduce((s, w) => s + parseFloat(w.amount), 0);
+      const p = this.currentPeriod;
+      const expectedCash = parseFloat(p.expected_cash) || 0;
+
+      const withdrawalRows = withdrawals.length > 0 ? withdrawals.map(w => {
+        const time = new Date(w.created_at).toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' });
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border-color);">
+          <div>
+            <div style="font-weight:600;font-size:0.9rem;">$${parseFloat(w.amount).toFixed(2)}</div>
+            <div style="font-size:0.75rem;color:var(--text-muted);">${w.reason || 'Sin motivo'} · ${w.withdrawn_by_name || ''} · ${time}</div>
+          </div>
+        </div>`;
+      }).join('') : '<p style="text-align:center;color:var(--text-muted);font-size:0.85rem;padding:12px 0;">No hay retiros en este período</p>';
+
+      const overlay = document.createElement('div');
+      overlay.id = 'withdrawal-overlay';
+      overlay.className = 'modal-overlay active';
+      overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;padding:16px;opacity:1;visibility:visible;';
+
+      overlay.innerHTML = `
+        <div class="card" style="max-width:480px;width:100%;max-height:90vh;overflow-y:auto;padding:var(--space-xl);">
+          <div style="text-align:center;margin-bottom:var(--space-lg);">
+            <div style="font-size:2.5rem;margin-bottom:8px;">💸</div>
+            <h2 style="font-size:1.3rem;margin-bottom:4px;">Retiro de Efectivo</h2>
+            <p style="color:var(--text-muted);font-size:0.85rem;">Efectivo disponible en caja: <strong style="color:var(--accent-primary);">$${expectedCash.toFixed(2)}</strong></p>
+          </div>
+
+          <!-- Formulario de retiro -->
+          <div class="form-group" style="margin-bottom:var(--space-md);">
+            <label class="form-label">💵 Monto a Retirar</label>
+            <input type="number" class="form-input" id="withdrawal-amount" value="" min="0.01" step="0.01"
+                   style="font-size:1.3rem;text-align:center;font-weight:700;" placeholder="0.00" autofocus>
+          </div>
+
+          <div class="form-group" style="margin-bottom:var(--space-lg);">
+            <label class="form-label">📝 Motivo del Retiro</label>
+            <input type="text" class="form-input" id="withdrawal-reason" placeholder="Ej: Retiro parcial, pago proveedor, etc.">
+          </div>
+
+          <div style="display:flex;gap:10px;margin-bottom:var(--space-lg);">
+            <button class="btn btn-block" onclick="document.getElementById('withdrawal-overlay').remove()"
+                    style="background:var(--bg-secondary);color:var(--text-secondary);border:1px solid var(--border-color);padding:14px;">
+              Cancelar
+            </button>
+            <button class="btn btn-primary btn-block" id="btn-do-withdrawal" onclick="POS.doWithdrawal()"
+                    style="padding:14px;font-weight:700;background:#f59e0b;border-color:#f59e0b;">
+              💸 Registrar Retiro
+            </button>
+          </div>
+
+          <!-- Historial de retiros -->
+          ${withdrawals.length > 0 ? `
+          <div style="border-top:1px solid var(--border-color);padding-top:var(--space-md);">
+            <h3 style="font-size:0.9rem;margin-bottom:var(--space-sm);color:var(--text-muted);">
+              📋 Retiros de Hoy (${withdrawals.length}) · Total: $${totalRetiros.toFixed(2)}
+            </h3>
+            ${withdrawalRows}
+          </div>
+          ` : ''}
+        </div>
+      `;
+
+      document.body.appendChild(overlay);
+      // Focus en el input
+      setTimeout(() => document.getElementById('withdrawal-amount')?.focus(), 100);
+    } catch (err) {
+      console.error('Error showWithdrawalModal:', err);
+      Toast.error('Error al abrir retiro de efectivo');
+    }
+  },
+
+  /**
+   * Ejecuta el retiro de efectivo
+   */
+  async doWithdrawal() {
+    const btn = document.getElementById('btn-do-withdrawal');
+    if (btn) { btn.disabled = true; btn.textContent = 'Registrando...'; }
+
+    const amount = parseFloat(document.getElementById('withdrawal-amount')?.value);
+    const reason = document.getElementById('withdrawal-reason')?.value || '';
+
+    if (!amount || amount <= 0) {
+      Toast.error('Ingrese un monto válido');
+      if (btn) { btn.disabled = false; btn.textContent = '💸 Registrar Retiro'; }
+      return;
+    }
+
+    try {
+      await API.post('/periods/withdrawals', { amount, reason });
+
+      // Cerrar modal
+      document.getElementById('withdrawal-overlay')?.remove();
+
+      Toast.success(`✅ Retiro de $${amount.toFixed(2)} registrado`);
+
+      // Refrescar datos del período
+      await this.loadPeriod();
+    } catch (err) {
+      Toast.error(err.message || 'Error registrando retiro');
+      if (btn) { btn.disabled = false; btn.textContent = '💸 Registrar Retiro'; }
+    }
+  },
+
+  /**
+   * Modal para cerrar caja / período
+   */
+  async showClosePeriodModal() {
+    try {
+      // Refrescar datos del período
+      await this.loadPeriod();
+      const p = this.currentPeriod;
+      if (!p) {
+        Toast.error('No hay período abierto');
+        return;
+      }
+
+    const expectedCash = parseFloat(p.expected_cash) || 0;
+    const sales = parseFloat(p.total_sales) || 0;
+    const orders = parseInt(p.total_orders) || 0;
+    const cash = parseFloat(p.cash_total) || 0;
+    const transfer = parseFloat(p.transfer_total) || 0;
+    const voided = parseFloat(p.voided_total) || 0;
+    const voidedCount = parseInt(p.voided_count) || 0;
+    const pending = parseInt(p.pending_count) || 0;
+    const opening = parseFloat(p.opening_cash) || 0;
+    const totalWithdrawals = parseFloat(p.total_withdrawals) || 0;
+    const withdrawalCount = parseInt(p.withdrawal_count) || 0;
+    const openTime = new Date(p.open_time).toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' });
+
+    // Crear modal
+    const overlay = document.createElement('div');
+    overlay.id = 'close-period-overlay';
+    overlay.className = 'modal-overlay active';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;padding:16px;opacity:1;visibility:visible;';
+    
+    overlay.innerHTML = `
+      <div class="card" style="max-width:520px;width:100%;max-height:90vh;overflow-y:auto;padding:var(--space-xl);">
+        <div style="text-align:center;margin-bottom:var(--space-lg);">
+          <div style="font-size:2.5rem;margin-bottom:8px;">🔒</div>
+          <h2 style="font-size:1.3rem;margin-bottom:4px;">Cerrar Caja</h2>
+          <p style="color:var(--text-muted);font-size:0.85rem;">Resumen del período · Abierto a las ${openTime}</p>
+        </div>
+
+        ${pending > 0 ? `
+        <div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:12px;margin-bottom:var(--space-md);text-align:center;">
+          <strong style="color:#ef4444;">⚠️ Hay ${pending} pedido(s) pendiente(s)</strong>
+          <p style="color:var(--text-muted);font-size:0.8rem;margin-top:4px;">Cierre o cancele los pedidos antes de cerrar la caja</p>
+        </div>
+        ` : ''}
+
+        <!-- Resumen -->
+        <div style="background:var(--bg-primary);border-radius:10px;padding:16px;margin-bottom:var(--space-lg);">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div style="text-align:center;padding:10px;background:var(--bg-secondary);border-radius:8px;">
+              <div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:4px;">Caja Inicial</div>
+              <div style="font-size:1.1rem;font-weight:700;">$${opening.toFixed(2)}</div>
+            </div>
+            <div style="text-align:center;padding:10px;background:var(--bg-secondary);border-radius:8px;">
+              <div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:4px;">Órdenes</div>
+              <div style="font-size:1.1rem;font-weight:700;">${orders}</div>
+            </div>
+            <div style="text-align:center;padding:10px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.2);border-radius:8px;">
+              <div style="font-size:0.75rem;color:#10b981;margin-bottom:4px;">💵 Efectivo</div>
+              <div style="font-size:1.1rem;font-weight:700;color:#10b981;">$${cash.toFixed(2)}</div>
+            </div>
+            <div style="text-align:center;padding:10px;background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.2);border-radius:8px;">
+              <div style="font-size:0.75rem;color:#3b82f6;margin-bottom:4px;">🏦 Transferencia</div>
+              <div style="font-size:1.1rem;font-weight:700;color:#3b82f6;">$${transfer.toFixed(2)}</div>
+            </div>
+          </div>
+
+          <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border-color);display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-weight:700;font-size:1rem;">Venta Total:</span>
+            <span style="font-weight:800;font-size:1.3rem;color:var(--accent-primary);">$${sales.toFixed(2)}</span>
+          </div>
+          ${voidedCount > 0 ? `
+          <div style="margin-top:8px;display:flex;justify-content:space-between;font-size:0.85rem;">
+            <span style="color:#ef4444;">Anuladas (${voidedCount}):</span>
+            <span style="color:#ef4444;">-$${voided.toFixed(2)}</span>
+          </div>` : ''}
+          ${withdrawalCount > 0 ? `
+          <div style="margin-top:8px;display:flex;justify-content:space-between;font-size:0.85rem;">
+            <span style="color:#f59e0b;">💸 Retiros (${withdrawalCount}):</span>
+            <span style="color:#f59e0b;">-$${totalWithdrawals.toFixed(2)}</span>
+          </div>` : ''}
+
+          <div style="margin-top:12px;padding:10px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.2);border-radius:8px;text-align:center;">
+            <div style="font-size:0.75rem;color:var(--accent-primary);margin-bottom:4px;">Efectivo Esperado en Caja</div>
+            <div style="font-size:1.4rem;font-weight:800;color:var(--accent-primary);">$${expectedCash.toFixed(2)}</div>
+            <div style="font-size:0.72rem;color:var(--text-muted);">($${opening.toFixed(2)} inicial + $${cash.toFixed(2)} ventas${withdrawalCount > 0 ? ` - $${totalWithdrawals.toFixed(2)} retiros` : ''})</div>
+          </div>
+        </div>
+
+        <!-- Conteo de caja -->
+        <div class="form-group" style="margin-bottom:var(--space-md);">
+          <label class="form-label">💵 Efectivo Contado en Caja</label>
+          <input type="number" class="form-input" id="closing-cash" value="" min="0" step="0.01"
+                 style="font-size:1.3rem;text-align:center;font-weight:700;" placeholder="${expectedCash.toFixed(2)}"
+                 oninput="POS.updateCashDifference()">
+          <div id="cash-difference" style="text-align:center;margin-top:6px;font-size:0.85rem;font-weight:600;"></div>
+        </div>
+
+        <div class="form-group" style="margin-bottom:var(--space-lg);">
+          <label class="form-label">📝 Notas de Cierre (opcional)</label>
+          <input type="text" class="form-input" id="closing-notes" placeholder="Observaciones del cierre">
+        </div>
+
+        <div style="display:flex;gap:10px;">
+          <button class="btn btn-block" onclick="document.getElementById('close-period-overlay').remove()"
+                  style="background:var(--bg-secondary);color:var(--text-secondary);border:1px solid var(--border-color);padding:14px;">
+            Cancelar
+          </button>
+          <button class="btn btn-primary btn-block" id="btn-close-period" onclick="POS.doClosePeriod()"
+                  style="padding:14px;font-weight:700;${pending > 0 ? 'opacity:0.5;pointer-events:none;' : ''}">
+            🔒 Cerrar Caja
+          </button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+    } catch (err) {
+      console.error('Error showClosePeriodModal:', err);
+      Toast.error('Error al abrir cierre de caja');
+    }
+  },
+
+  /**
+   * Actualiza la diferencia en el modal de cierre
+   */
+  updateCashDifference() {
+    const input = document.getElementById('closing-cash');
+    const diffEl = document.getElementById('cash-difference');
+    if (!input || !diffEl || !this.currentPeriod) return;
+
+    const counted = parseFloat(input.value);
+    if (isNaN(counted)) { diffEl.textContent = ''; return; }
+
+    const expected = parseFloat(this.currentPeriod.expected_cash) || 0;
+    const diff = counted - expected;
+
+    if (Math.abs(diff) < 0.01) {
+      diffEl.innerHTML = '<span style="color:#10b981;">✅ Caja cuadrada</span>';
+    } else if (diff > 0) {
+      diffEl.innerHTML = `<span style="color:#3b82f6;">📈 Sobrante: +$${diff.toFixed(2)}</span>`;
+    } else {
+      diffEl.innerHTML = `<span style="color:#ef4444;">📉 Faltante: -$${Math.abs(diff).toFixed(2)}</span>`;
+    }
+  },
+
+  /**
+   * Ejecuta el cierre de caja / período
+   */
+  async doClosePeriod() {
+    const btn = document.getElementById('btn-close-period');
+    if (btn) { btn.disabled = true; btn.textContent = 'Cerrando...'; }
+
+    const closingCash = parseFloat(document.getElementById('closing-cash')?.value) || 0;
+    const notes = document.getElementById('closing-notes')?.value || '';
+
+    try {
+      const res = await API.post('/periods/close', { closingCash, notes });
+      
+      // Remover modal de cierre
+      document.getElementById('close-period-overlay')?.remove();
+
+      // Mostrar resumen final
+      const d = res.data;
+      const diff = parseFloat(d.difference) || 0;
+      const diffText = Math.abs(diff) < 0.01 ? '✅ Caja cuadrada'
+        : diff > 0 ? `📈 Sobrante: +$${diff.toFixed(2)}`
+        : `📉 Faltante: -$${Math.abs(diff).toFixed(2)}`;
+      const diffColor = Math.abs(diff) < 0.01 ? '#10b981' : diff > 0 ? '#3b82f6' : '#ef4444';
+
+      this.currentPeriod = null;
+
+      // Mostrar pantalla de resumen
+      if (this.container) {
+        this.container.innerHTML = `
+          <div class="floor-plan-view" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:calc(100vh - var(--header-height));">
+            <div class="card" style="max-width:480px;width:100%;padding:var(--space-xl);text-align:center;">
+              <div style="font-size:3rem;margin-bottom:var(--space-md);">✅</div>
+              <h2 style="margin-bottom:var(--space-xs);">Caja Cerrada</h2>
+              <p style="color:var(--text-muted);font-size:0.85rem;margin-bottom:var(--space-lg);">Período finalizado correctamente</p>
+
+              <div style="background:var(--bg-primary);border-radius:10px;padding:16px;margin-bottom:var(--space-lg);text-align:left;">
+                <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border-color);">
+                  <span style="color:var(--text-muted);">Caja Inicial:</span>
+                  <span style="font-weight:600;">$${parseFloat(d.opening_cash).toFixed(2)}</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border-color);">
+                  <span style="color:var(--text-muted);">Órdenes:</span>
+                  <span style="font-weight:600;">${d.total_orders}</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border-color);">
+                  <span style="color:var(--text-muted);">Venta Total:</span>
+                  <span style="font-weight:700;color:var(--accent-primary);">$${parseFloat(d.total_sales).toFixed(2)}</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border-color);">
+                  <span style="color:var(--text-muted);">💵 Efectivo:</span>
+                  <span style="font-weight:600;">$${parseFloat(d.cash_total).toFixed(2)}</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border-color);">
+                  <span style="color:var(--text-muted);">🏦 Transferencia:</span>
+                  <span style="font-weight:600;">$${parseFloat(d.transfer_total).toFixed(2)}</span>
+                </div>
+                ${parseFloat(d.total_withdrawals) > 0 ? `
+                <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border-color);">
+                  <span style="color:#f59e0b;">💸 Retiros:</span>
+                  <span style="font-weight:600;color:#f59e0b;">-$${parseFloat(d.total_withdrawals).toFixed(2)}</span>
+                </div>
+                ` : ''}
+                <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border-color);">
+                  <span style="color:var(--text-muted);">Esperado en Caja:</span>
+                  <span style="font-weight:700;">$${parseFloat(d.expected_cash).toFixed(2)}</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border-color);">
+                  <span style="color:var(--text-muted);">Contado en Caja:</span>
+                  <span style="font-weight:700;">$${parseFloat(d.closing_cash).toFixed(2)}</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;padding:8px 0;">
+                  <span style="font-weight:700;">Diferencia:</span>
+                  <span style="font-weight:800;color:${diffColor};">${diffText}</span>
+                </div>
+              </div>
+
+              <button class="btn btn-primary btn-block" onclick="POS.init(POS.container)" style="padding:14px;font-size:1.05rem;">
+                🔓 Abrir Nuevo Período
+              </button>
+            </div>
+          </div>
+        `;
+      }
+
+      Toast.success('✅ Caja cerrada exitosamente');
+    } catch (err) {
+      Toast.error(err.message || 'Error cerrando caja');
+      if (btn) { btn.disabled = false; btn.textContent = '🔒 Cerrar Caja'; }
     }
   },
 

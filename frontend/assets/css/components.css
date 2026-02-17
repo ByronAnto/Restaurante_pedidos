@@ -1019,3 +1019,50 @@
         font-size: 0.65rem;
     }
 }
+
+/* ═══════════════════════════════════════════════════════
+   Reports BI Dashboard - Tab Styles
+   ═══════════════════════════════════════════════════════ */
+.rpt-tab {
+    padding: 8px 18px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-primary);
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.85rem;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.rpt-tab:hover {
+    background: var(--bg-card);
+    color: var(--text-primary);
+}
+
+.rpt-tab.active {
+    background: var(--accent-primary);
+    color: #000;
+    border-color: var(--accent-primary);
+}
+
+@media (max-width: 768px) {
+    .rpt-tab {
+        padding: 6px 12px;
+        font-size: 0.75rem;
+    }
+}
+
+/* ═══════════════════════════════════════════════════════
+   Print Styles for Reports
+   ═══════════════════════════════════════════════════════ */
+@media print {
+    body * { visibility: hidden; }
+    #reports-printable, #reports-printable * { visibility: visible; }
+    #reports-printable { position: absolute; left: 0; top: 0; width: 100%; }
+    .sidebar, .pos-header, .rpt-tab, button, select { display: none !important; }
+    .card { break-inside: avoid; border: 1px solid #ddd !important; margin-bottom: 10px; }
+    .data-table th, .data-table td { padding: 4px 8px !important; font-size: 10px !important; }
+    .stat-card { border: 1px solid #ddd !important; background: #f8f9fa !important; }
+}

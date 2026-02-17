@@ -34,6 +34,7 @@ const inventoryRoutes = require('./routes/inventory.routes');
 const recipesRoutes = require('./routes/recipes.routes');
 const tablesRoutes = require('./routes/tables.routes');
 const zonesRoutes = require('./routes/zones.routes');
+const periodsRoutes = require('./routes/periods.routes');
 
 // ─── Inicializar Express ───
 const app = express();
@@ -83,6 +84,7 @@ app.use('/api/inventory', inventoryRoutes);
 app.use('/api/recipes', recipesRoutes);
 app.use('/api/tables', tablesRoutes);
 app.use('/api/zones', zonesRoutes);
+app.use('/api/periods', periodsRoutes);
 
 // ─── Health check ───
 app.get('/api/health', (req, res) => {
@@ -292,11 +294,53 @@ const autoBootstrap = async () => {
                 await client.query('UPDATE tables SET zone_id = z.id FROM zones z WHERE tables.zone = z.name AND tables.zone_id IS NULL');
             } catch(migErr) { /* non-fatal */ }
 
+            // Tabla de períodos de venta (jornadas / turnos de caja)
+            await client.query(`CREATE TABLE IF NOT EXISTS sales_periods (
+                id SERIAL PRIMARY KEY,
+                open_date DATE NOT NULL,
+                open_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                close_time TIMESTAMP,
+                opened_by INT REFERENCES users(id),
+                closed_by INT REFERENCES users(id),
+                opening_cash DECIMAL(12,2) DEFAULT 0,
+                closing_cash DECIMAL(12,2),
+                expected_cash DECIMAL(12,2),
+                total_sales DECIMAL(12,2) DEFAULT 0,
+                total_orders INT DEFAULT 0,
+                cash_total DECIMAL(12,2) DEFAULT 0,
+                transfer_total DECIMAL(12,2) DEFAULT 0,
+                voided_total DECIMAL(12,2) DEFAULT 0,
+                status VARCHAR(20) DEFAULT 'open' CHECK (status IN ('open','closed')),
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )`);
+
             // Migraciones Full Service
             await client.query(`ALTER TABLE sales ADD COLUMN IF NOT EXISTS order_type VARCHAR(20) DEFAULT 'dine_in'`);
             await client.query(`ALTER TABLE sales ADD COLUMN IF NOT EXISTS table_id INT`);
             await client.query(`ALTER TABLE kitchen_orders ADD COLUMN IF NOT EXISTS order_type VARCHAR(20) DEFAULT 'dine_in'`);
             await client.query(`ALTER TABLE kitchen_orders ADD COLUMN IF NOT EXISTS table_name VARCHAR(50)`);
+
+            // Migración: period_id en sales
+            await client.query(`ALTER TABLE sales ADD COLUMN IF NOT EXISTS period_id INT`);
+
+            // Migración: config de períodos en DB existentes
+            await client.query(`INSERT INTO config (key, value, config_group, description)
+                VALUES ('period_start_hour','06','pos','Hora inicio del período (0-23)')
+                ON CONFLICT (key) DO NOTHING`);
+            await client.query(`INSERT INTO config (key, value, config_group, description)
+                VALUES ('period_end_hour','22','pos','Hora fin del período (0-23)')
+                ON CONFLICT (key) DO NOTHING`);
+
+            // Tabla de retiros de efectivo
+            await client.query(`CREATE TABLE IF NOT EXISTS cash_withdrawals (
+                id SERIAL PRIMARY KEY,
+                period_id INT NOT NULL REFERENCES sales_periods(id) ON DELETE CASCADE,
+                amount DECIMAL(12,2) NOT NULL,
+                reason TEXT,
+                withdrawn_by INT REFERENCES users(id),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )`);
 
             // Migraciones Anulación de pedidos
             await client.query(`ALTER TABLE sales ADD COLUMN IF NOT EXISTS voided_at TIMESTAMP`);
@@ -362,7 +406,9 @@ const autoBootstrap = async () => {
                     ('sri_ruc','','sri','RUC para facturación electrónica'),
                     ('sale_number_prefix','V','general','Prefijo para número de venta'),
                     ('sale_number_counter','0','general','Contador de número de venta'),
-                    ('pos_mode','full_service','pos','Modo POS: fast_food, full_service, hybrid')
+                    ('pos_mode','full_service','pos','Modo POS: fast_food, full_service, hybrid'),
+                    ('period_start_hour','06','pos','Hora inicio del período de ventas (0-23)'),
+                    ('period_end_hour','22','pos','Hora fin del período de ventas (0-23)')
                 `);
 
                 logger.success('📦 Datos iniciales insertados (admin/admin123, cajero/cajero123)');

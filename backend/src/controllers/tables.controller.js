@@ -21,6 +21,7 @@ class TablesController {
                     s.created_at as order_started_at
                 FROM tables t
                 LEFT JOIN sales s ON s.table_id = t.id AND s.status = 'pending'
+                    AND (s.period_id = (SELECT id FROM sales_periods WHERE status = 'open' LIMIT 1) OR s.period_id IS NULL)
                 WHERE t.active = true
                 ORDER BY t.zone, t.name
             `);
@@ -54,6 +55,7 @@ class TablesController {
                 FROM tables t
                 LEFT JOIN zones z ON z.id = t.zone_id
                 LEFT JOIN sales s ON s.table_id = t.id AND s.status = 'pending'
+                    AND (s.period_id = (SELECT id FROM sales_periods WHERE status = 'open' LIMIT 1) OR s.period_id IS NULL)
                 LEFT JOIN sale_items si ON si.sale_id = s.id
                 WHERE t.active = true
                 GROUP BY t.id, z.id, s.id
