@@ -6,20 +6,30 @@ on:
       - main
       - master
 
+env:
+  DEPLOY_PATH: /home/oem/proyectos/Restaurante_pedidos
+
 jobs:
   deploy:
     name: 🏗️ Build & Deploy
     runs-on: self-hosted
+    defaults:
+      run:
+        working-directory: /home/oem/proyectos/Restaurante_pedidos
 
     steps:
-      - name: 📥 Checkout código
-        uses: actions/checkout@v4
+      - name: 📥 Sincronizar código en servidor
+        run: |
+          cd ${{ env.DEPLOY_PATH }}
+          git fetch origin
+          git reset --hard origin/${{ github.ref_name }}
+          echo "✅ Código actualizado a $(git log --oneline -1)"
 
       - name: 🛑 Detener contenedores anteriores
-        run: docker-compose down --remove-orphans || true
+        run: docker compose down --remove-orphans || true
 
       - name: 🏗️ Construir y levantar contenedores
-        run: docker-compose up -d --build --force-recreate
+        run: docker compose up -d --build --force-recreate
 
       - name: ⏳ Esperar que la DB esté lista
         run: |
