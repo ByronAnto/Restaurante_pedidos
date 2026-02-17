@@ -225,8 +225,8 @@
 
 .pos-ticket-item {
     display: flex;
-    align-items: center;
-    gap: var(--space-md);
+    flex-direction: column;
+    gap: 4px;
     padding: 10px 12px;
     background: var(--bg-card);
     border: 1px solid var(--border-color);
@@ -235,22 +235,24 @@
     animation: fadeIn 0.2s ease;
 }
 
-.pos-ticket-item-info {
-    flex: 1;
-    min-width: 0;
-}
-
 .pos-ticket-item-name {
     font-size: 0.85rem;
     font-weight: 600;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    line-height: 1.3;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
 
-.pos-ticket-item-price {
+.pos-ticket-item-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+}
+
+.pos-ticket-item-uprice {
     font-size: 0.75rem;
     color: var(--text-muted);
+    min-width: 65px;
 }
 
 .pos-ticket-item-qty {
@@ -453,8 +455,9 @@
 
 .pos-existing-item {
     display: flex;
-    align-items: center;
-    gap: 8px;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 8px;
     padding: 6px var(--space-lg);
     border-bottom: 1px solid rgba(255,255,255,0.03);
     font-size: 0.82rem;
@@ -473,13 +476,17 @@
 
 .pos-existing-item-name {
     flex: 1;
+    min-width: 60%;
     color: var(--text-secondary);
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
 
 .pos-existing-item-price {
     font-weight: 600;
     color: var(--text-muted);
     font-size: 0.8rem;
+    margin-left: auto;
 }
 
 .pos-new-items-header {
@@ -574,9 +581,10 @@
 
 .pay-summary-item {
     display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 4px 0;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 8px;
+    padding: 5px 0;
     font-size: 0.85rem;
     border-bottom: 1px solid rgba(255,255,255,0.04);
 }
@@ -594,12 +602,16 @@
 
 .pay-summary-item-name {
     flex: 1;
+    min-width: 60%;
     color: var(--text-primary);
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
 
 .pay-summary-item-price {
     font-weight: 700;
     color: var(--text-secondary);
+    margin-left: auto;
 }
 
 /* Total display */

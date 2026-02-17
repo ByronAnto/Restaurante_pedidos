@@ -482,17 +482,17 @@ const POS = {
       const lineTotal = item.pvp * item.quantity;
       return `
       <div class="pos-ticket-item">
-        <div class="pos-ticket-item-info">
-          <div class="pos-ticket-item-name">${item.productName}</div>
-          <div class="pos-ticket-item-price">$${item.pvp.toFixed(2)} c/u</div>
+        <div class="pos-ticket-item-name">${item.productName}</div>
+        <div class="pos-ticket-item-row">
+          <span class="pos-ticket-item-uprice">$${item.pvp.toFixed(2)} c/u</span>
+          <div class="pos-ticket-item-qty">
+            <button class="pos-qty-btn" onclick="POS.updateQuantity(${index}, -1)">−</button>
+            <span class="pos-qty-value">${item.quantity}</span>
+            <button class="pos-qty-btn" onclick="POS.updateQuantity(${index}, 1)">+</button>
+          </div>
+          <div class="pos-ticket-item-subtotal">$${lineTotal.toFixed(2)}</div>
+          <button class="pos-ticket-item-remove" onclick="POS.removeFromCart(${index})">🗑️</button>
         </div>
-        <div class="pos-ticket-item-qty">
-          <button class="pos-qty-btn" onclick="POS.updateQuantity(${index}, -1)">−</button>
-          <span class="pos-qty-value">${item.quantity}</span>
-          <button class="pos-qty-btn" onclick="POS.updateQuantity(${index}, 1)">+</button>
-        </div>
-        <div class="pos-ticket-item-subtotal">$${lineTotal.toFixed(2)}</div>
-        <button class="pos-ticket-item-remove" onclick="POS.removeFromCart(${index})">🗑️</button>
       </div>
     `;
     }).join('');

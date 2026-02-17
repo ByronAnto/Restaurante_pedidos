@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - master
 
 env:
   DEPLOY_PATH: /home/oem/proyectos/Restaurante_pedidos
