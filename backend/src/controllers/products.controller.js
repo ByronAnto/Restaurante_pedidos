@@ -146,7 +146,7 @@ class ProductsController {
             const result = await query(
                 `INSERT INTO products (category_id, name, description, price, cost, tax_rate, image_url, available, track_stock, stock_quantity, show_in_all_categories)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
-                [categoryId, name, description || '', price, cost || 0, taxRate || 15, imageUrl, available !== false, trackStock || false, stockQuantity || 0, showInAllCategories || false]
+                [categoryId, name, description ?? '', price, cost ?? 0, taxRate ?? 15, imageUrl, available !== false, trackStock ?? false, stockQuantity ?? 0, showInAllCategories ?? false]
             );
 
             return created(res, result.rows[0], 'Producto creado');
