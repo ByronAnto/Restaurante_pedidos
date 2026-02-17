@@ -393,6 +393,22 @@
     background: var(--color-danger-bg);
 }
 
+/* Mobile close button for ticket panel */
+.mobile-ticket-close {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-sm);
+    border: none;
+    background: var(--bg-hover);
+    color: var(--text-primary);
+    font-size: 1.2rem;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
 /* Items del ticket */
 .pos-ticket-items {
     flex: 1;
@@ -1161,6 +1177,72 @@
     }
 }
 
+/* ═══ Mobile Cart FAB & Overlay (base: hidden) ═══ */
+.mobile-cart-fab {
+    display: none;
+    position: fixed;
+    bottom: 24px;
+    right: 16px;
+    width: auto;
+    min-width: 60px;
+    height: 56px;
+    padding: 0 20px;
+    border-radius: 28px;
+    background: linear-gradient(135deg, var(--accent-primary), var(--accent-primary-hover));
+    color: var(--text-dark);
+    border: none;
+    font-size: 1rem;
+    font-weight: 700;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    z-index: 1000;
+    box-shadow: 0 4px 20px var(--accent-primary-glow), 0 2px 8px rgba(0,0,0,0.3);
+    transition: all 0.3s ease;
+    animation: fabPulse 2s ease-in-out infinite;
+}
+
+@keyframes fabPulse {
+    0%, 100% { box-shadow: 0 4px 20px var(--accent-primary-glow), 0 2px 8px rgba(0,0,0,0.3); }
+    50% { box-shadow: 0 4px 30px var(--accent-primary-glow), 0 2px 12px rgba(0,0,0,0.4); }
+}
+
+.mobile-cart-fab:active {
+    transform: scale(0.95);
+}
+
+.mobile-cart-fab .fab-badge {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--color-danger);
+    color: white;
+    font-size: 0.7rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.cart-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1050;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+}
+
+.cart-overlay.active {
+    display: block;
+    opacity: 1;
+    visibility: visible;
+}
+
 @media (max-width: 768px) {
     /* Stack layout: products on top, ticket hidden until toggled */
     .pos-layout {
@@ -1172,6 +1254,8 @@
 
     .pos-products-panel {
         height: 100%;
+        overflow-y: auto;
+        padding-bottom: 80px;
     }
 
     /* Ticket slides from the right as a panel */
@@ -1182,16 +1266,60 @@
         width: 85vw;
         max-width: 380px;
         height: 100vh;
-        z-index: 900;
+        height: 100dvh;
+        z-index: 1100;
         transform: translateX(100%);
         transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         box-shadow: none;
         border-left: 1px solid var(--border-color);
+        display: flex;
+        flex-direction: column;
     }
 
     .pos-ticket-panel.mobile-open {
         transform: translateX(0);
         box-shadow: -4px 0 24px rgba(0, 0, 0, 0.5);
+    }
+
+    /* Header with close button on mobile */
+    .pos-ticket-header {
+        flex-shrink: 0;
+        position: relative;
+    }
+
+    .mobile-ticket-close {
+        display: flex !important;
+    }
+
+    /* Items scroll area */
+    .pos-ticket-items {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* Totals pinned */
+    .pos-ticket-totals {
+        flex-shrink: 0;
+        border-top: 1px solid var(--border-color);
+    }
+
+    /* Action buttons pinned at bottom */
+    .pos-action-buttons {
+        flex-shrink: 0;
+        padding: var(--space-xs) var(--space-sm) !important;
+        padding-bottom: calc(var(--space-sm) + env(safe-area-inset-bottom, 0px)) !important;
+    }
+
+    .pos-action-btn {
+        padding: 12px 10px;
+    }
+
+    /* Existing items section scrollable */
+    .pos-existing-items {
+        max-height: 120px;
+        overflow-y: auto;
     }
 
     .pos-products-grid {
@@ -1265,9 +1393,13 @@
         font-size: 1rem;
     }
 
-    /* Floating cart button */
+    /* Floating cart FAB - show on mobile */
     .mobile-cart-fab {
-        display: flex;
+        display: flex !important;
+    }
+
+    .cart-overlay.active {
+        display: block !important;
     }
 
     /* Payment modal full screen on mobile */
@@ -1275,8 +1407,28 @@
         max-width: 100%;
         width: 100%;
         max-height: 100vh;
+        max-height: 100dvh;
         border-radius: 0;
         height: 100vh;
+        height: 100dvh;
+    }
+
+    .pay-modal-body {
+        padding: 12px 14px;
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .pay-modal-footer {
+        flex-shrink: 0;
+        padding: 12px 16px;
+        padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    }
+
+    .pay-modal-header {
+        flex-shrink: 0;
     }
 
     .pay-denom-btn {
@@ -1287,6 +1439,31 @@
 
     .pay-total-amount {
         font-size: 1.6rem;
+    }
+
+    .pay-exact-btn {
+        padding: 12px 18px;
+        font-size: 1.3rem;
+        min-width: 48px;
+    }
+
+    .pay-input {
+        font-size: 1.1rem;
+        padding: 10px;
+    }
+
+    .pay-input-currency {
+        padding: 10px 12px;
+        font-size: 1rem;
+    }
+
+    .pay-summary-items {
+        max-height: 80px;
+    }
+
+    .pay-total-display {
+        padding: 10px 14px;
+        margin-bottom: 10px;
     }
 }
 
@@ -1311,63 +1488,7 @@
     }
 }
 
-/* Floating Cart Button (mobile) */
-.mobile-cart-fab {
-    display: none;
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    width: 60px;
-    height: 60px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, var(--accent-primary), var(--accent-primary-hover));
-    color: var(--text-dark);
-    border: none;
-    font-size: 1.5rem;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    z-index: 800;
-    box-shadow: 0 4px 20px var(--accent-primary-glow);
-    transition: all 0.3s ease;
-}
-
-.mobile-cart-fab:active {
-    transform: scale(0.9);
-}
-
-.mobile-cart-fab .fab-badge {
-    position: absolute;
-    top: -2px;
-    right: -2px;
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    background: var(--color-danger);
-    color: white;
-    font-size: 0.7rem;
-    font-weight: 700;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-/* Cart overlay backdrop on mobile */
-.cart-overlay {
-    display: none;
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.5);
-    z-index: 899;
-    opacity: 0;
-    visibility: hidden;
-    transition: all 0.3s ease;
-}
-
-.cart-overlay.active {
-    opacity: 1;
-    visibility: visible;
-}
+/* (mobile-cart-fab and cart-overlay base styles moved above media queries) */
 
 /* ═══════════════════════════════════════════════════════
    FULL SERVICE MODE - TABLE MAP & HYBRID FLOW

@@ -231,6 +231,7 @@ const POS = {
         <!-- Panel del Ticket -->
         <div class="pos-ticket-panel">
           <div class="pos-ticket-header">
+            <button class="mobile-ticket-close" onclick="POS.closeMobileCart()">←</button>
             <div class="pos-ticket-title">
               🧾 Ticket de Venta
               <span class="pos-ticket-count" id="cart-count">${this.cart.length}</span>
@@ -346,7 +347,7 @@ const POS = {
 
       <!-- Mobile Cart FAB -->
       <button class="mobile-cart-fab" id="mobile-cart-fab" onclick="POS.toggleMobileCart()">
-        🛒 <span class="fab-badge" id="fab-cart-count">${this.cart.length || 0}</span>
+        🛒 Ver Ticket <span class="fab-badge" id="fab-cart-count">${this.cart.length || 0}</span>
       </button>
       <!-- Cart overlay for mobile -->
       <div class="cart-overlay" id="cart-overlay" onclick="POS.closeMobileCart()"></div>
@@ -1013,6 +1014,9 @@ const POS = {
    * Abre modal de pago
    */
   openPaymentModal(method, isClosingOrder = false) {
+    // Cerrar ticket móvil antes de abrir el modal de pago
+    this.closeMobileCart();
+
     this.paymentMethod = method;
     this.isClosingOrder = isClosingOrder;
     const totalToPay = isClosingOrder && this.currentOrder
@@ -1067,13 +1071,15 @@ const POS = {
 
     document.getElementById('payment-modal').classList.add('active');
 
-    // Focus
-    setTimeout(() => {
-      const input = method === 'cash'
-        ? document.getElementById('payment-received')
-        : document.getElementById('payment-transfer-ref');
-      if (input) input.focus();
-    }, 300);
+    // Focus solo en desktop (en mobile el teclado tapa la pantalla)
+    if (window.innerWidth > 768) {
+      setTimeout(() => {
+        const input = method === 'cash'
+          ? document.getElementById('payment-received')
+          : document.getElementById('payment-transfer-ref');
+        if (input) input.focus();
+      }, 300);
+    }
   },
 
   closePaymentModal() {
