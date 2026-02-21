@@ -40,29 +40,22 @@ class TablesController {
                 SELECT t.*,
                     z.zone_type, z.icon as zone_icon, z.grid_col, z.grid_row,
                     z.grid_w, z.grid_h, z.color as zone_color,
-                    s.id as active_sale_id,
-                    s.sale_number as active_sale_number,
-                    s.total as active_total,
-                    s.subtotal as active_subtotal,
-                    s.created_at as order_started_at,
-                    COALESCE(json_agg(json_build_object(
-                        'id', si.id,
-                        'product_name', si.product_name,
-                        'quantity', si.quantity,
-                        'unit_price', si.unit_price,
-                        'subtotal', si.subtotal
-                    )) FILTER (WHERE si.id IS NOT NULL), '[]') as order_items
+                    COUNT(s.id) FILTER (WHERE s.id IS NOT NULL)::int as active_split_count,
+                    MIN(s.id)                     as active_sale_id,
+                    MIN(s.sale_number)             as active_sale_number,
+                    COALESCE(SUM(s.total), 0)     as active_total,
+                    COALESCE(SUM(s.subtotal), 0)  as active_subtotal,
+                    MIN(s.created_at)              as order_started_at,
+                    '[]'::json                     as order_items
                 FROM tables t
                 LEFT JOIN zones z ON z.id = t.zone_id
                 LEFT JOIN sales s ON s.table_id = t.id AND s.status = 'pending'
                     AND (s.period_id = (SELECT id FROM sales_periods WHERE status = 'open' LIMIT 1) OR s.period_id IS NULL)
-                LEFT JOIN sale_items si ON si.sale_id = s.id
                 WHERE t.active = true
-                GROUP BY t.id, z.id, s.id
+                GROUP BY t.id, z.id
                 ORDER BY t.zone, t.name
             `);
 
-            // Get zones
             const zones = [...new Set(tablesResult.rows.map(t => t.zone))];
 
             return success(res, {

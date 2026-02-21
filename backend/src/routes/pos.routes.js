@@ -17,4 +17,10 @@ router.get('/open-orders', (req, res, next) => posController.getOpenOrders(req, 
 router.post('/orders/:id/items', (req, res, next) => posController.addItemsToOrder(req, res, next));
 router.post('/orders/:id/close', (req, res, next) => posController.closeOrder(req, res, next));
 
+// División de mesas (Table Splitting)
+router.get('/tables/:tableId/splits', (req, res, next) => posController.getTableSplits(req, res, next));
+router.post('/tables/:tableId/splits', (req, res, next) => posController.createSplit(req, res, next));
+router.patch('/split-items/:itemId/move', (req, res, next) => posController.moveSplitItem(req, res, next));
+router.delete('/splits/:id', (req, res, next) => posController.deleteSplit(req, res, next));
+
 module.exports = router;

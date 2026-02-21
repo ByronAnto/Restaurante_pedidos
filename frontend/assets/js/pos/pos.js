@@ -16,10 +16,11 @@ const POS = {
   container: null, // Referencia al contenedor
   
   // Full Service Mode
-  mode: 'table-map', // 'table-map' | 'ordering'
+  mode: 'table-map', // 'table-map' | 'split-chooser' | 'ordering'
   orderType: null, // 'dine_in' | 'takeaway'
   currentTable: null,
   currentOrder: null,
+  currentSplits: [], // sub-cuentas de la mesa dividida
 
   // Período / Jornada de caja
   currentPeriod: null,
@@ -110,6 +111,8 @@ const POS = {
     
     if (this.mode === 'table-map') {
       this.renderTableMap(container);
+    } else if (this.mode === 'split-chooser') {
+      this.renderSplitChooser(container);
     } else {
       this.renderOrdering(container);
       // Inicializar scroll de categorías después del render
@@ -273,6 +276,8 @@ const POS = {
     if (!tables?.length) return '';
     return tables.map(t => {
       const occ = !!t.active_sale_id;
+      const splitCount = parseInt(t.active_split_count) || 0;
+      const isSplit = splitCount > 1;
       const cls = occ ? 'occupied' : 'free';
       const shape = t.shape || 'square';
       return `
@@ -280,9 +285,11 @@ const POS = {
              data-action="select-table" data-table-id="${t.id}"
              title="${t.name} · ${t.capacity} personas">
           <div class="fp-table-wrap">
-            ${shape === 'round' ? this.renderRoundTable(t, occ) : this.renderSquareTable(t, occ)}
+            ${shape === 'round' ? this.renderRoundTable(t, occ, isSplit, splitCount) : this.renderSquareTable(t, occ, isSplit, splitCount)}
           </div>
-          <div class="fp-table-badge ${cls}">${occ ? 'OCUPADA' : 'LIBRE'}</div>
+          <div class="fp-table-badge ${isSplit ? 'split' : cls}">
+            ${isSplit ? `✂️ ${splitCount} cuentas` : (occ ? 'OCUPADA' : 'LIBRE')}
+          </div>
         </div>`;
     }).join('');
   },
@@ -290,7 +297,7 @@ const POS = {
   /**
    * Mesa cuadrada / rectangular (sillas arriba y abajo)
    */
-  renderSquareTable(t, occ) {
+  renderSquareTable(t, occ, isSplit = false, splitCount = 0) {
     const top = Math.ceil(t.capacity / 2);
     const bot = Math.floor(t.capacity / 2);
     const ch = '<div class="fp-chair"></div>';
@@ -300,6 +307,7 @@ const POS = {
         <strong>${t.name}</strong>
         <small>👥 ${t.capacity}</small>
         ${occ ? `<span class="fp-total">$${Number.parseFloat(t.active_total || 0).toFixed(2)}</span>` : ''}
+        ${isSplit ? `<span class="fp-split-icon">✂️${splitCount}</span>` : ''}
       </div>
       <div class="fp-chairs-row">${ch.repeat(bot)}</div>`;
   },
@@ -307,7 +315,7 @@ const POS = {
   /**
    * Mesa redonda (sillas en círculo alrededor)
    */
-  renderRoundTable(t, occ) {
+  renderRoundTable(t, occ, isSplit = false, splitCount = 0) {
     const chairs = [];
     for (let i = 0; i < t.capacity; i++) {
       const a = ((360 / t.capacity) * i - 90) * Math.PI / 180;
@@ -322,6 +330,7 @@ const POS = {
           <strong>${t.name}</strong>
           <small>👥 ${t.capacity}</small>
           ${occ ? `<span class="fp-total">$${Number.parseFloat(t.active_total || 0).toFixed(2)}</span>` : ''}
+          ${isSplit ? `<span class="fp-split-icon">✂️${splitCount}</span>` : ''}
         </div>
       </div>`;
   },
@@ -342,10 +351,14 @@ const POS = {
         <span class="pos-breadcrumb-divider">/</span>
         <div class="pos-breadcrumb-current">
           <span class="breadcrumb-type-badge ${this.orderType === 'dine_in' ? 'dine-in' : 'takeaway'}">
-            ${this.orderType === 'dine_in' ? `🏠 ${this.currentTable?.name || 'Mesa'}` : '📦 Para Llevar'}
+            ${this.orderType === 'dine_in'
+              ? `🏠 ${this.currentTable?.name || 'Mesa'}${this.currentOrder?.split_name ? ` · ${this.currentOrder.split_name}` : ''}`
+              : '📦 Para Llevar'}
           </span>
           ${this.currentOrder ? `<span class="breadcrumb-order-num">${this.currentOrder.sale_number}</span>` : '<span class="breadcrumb-new-order">Nuevo pedido</span>'}
         </div>
+        ${this.currentSplits.length > 1 ? `
+        <button class="pos-breadcrumb-splits" onclick="POS.backToSplitChooser()">✂️ Ver cuentas</button>` : ''}
       </div>
 
       <div class="pos-layout" style="height: calc(100vh - var(--header-height) - 50px);">
@@ -401,7 +414,7 @@ const POS = {
           ${this.currentOrder && this.currentOrder.items && this.currentOrder.items.length > 0 ? `
             <div class="pos-existing-items">
               <div class="pos-existing-items-header">
-                <span>✅ Ya en cocina</span>
+                <span>✅ Ya en cocina${this.currentOrder.split_name ? ` · ${this.currentOrder.split_name}` : ''}</span>
                 <span class="pos-existing-items-count">${this.currentOrder.items.length} items</span>
               </div>
               ${this.currentOrder.items.map(item => {
@@ -411,6 +424,7 @@ const POS = {
                   <span class="pos-existing-item-qty">${item.quantity}x</span>
                   <span class="pos-existing-item-name">${item.product_name}${item.modifiers ? ` <em style="color:var(--accent-primary);font-size:0.8rem">(${item.modifiers})</em>` : ''}</span>
                   <span class="pos-existing-item-price">$${itemPVP.toFixed(2)}</span>
+                  ${this.currentSplits.length > 1 ? `<button class="item-move-btn" onclick="POS.showMoveItemMenu(${item.id}, this)" title="Mover a otra cuenta">→</button>` : ''}
                 </div>
               `}).join('')}
             </div>
@@ -449,8 +463,16 @@ const POS = {
             ` : this.orderType === 'dine_in' && this.currentOrder ? `
               <!-- Dine-in: Con orden abierta -->
               <div class="pos-action-group">
+                <!-- Fila 0: Dividir mesa -->
+                <button class="pos-action-btn split-btn full-width" onclick="POS.showCreateSplitModal()">
+                  <div class="pos-action-btn-icon">✂️</div>
+                  <div class="pos-action-btn-text">
+                    <span class="pos-action-btn-title">DIVIDIR MESA</span>
+                    <span class="pos-action-btn-sub">Crear sub-cuenta independiente</span>
+                  </div>
+                </button>
                 <!-- Fila 1: Agregar items (solo si hay nuevos) -->
-                <button class="pos-action-btn add-items full-width" onclick="POS.addItemsToOrder()" 
+                <button class="pos-action-btn add-items full-width" onclick="POS.addItemsToOrder()"
                         ${this.cart.length === 0 ? 'disabled' : ''} id="btn-add-items">
                   <div class="pos-action-btn-icon">🔥</div>
                   <div class="pos-action-btn-text">
@@ -468,12 +490,20 @@ const POS = {
                       <span class="pos-action-btn-sub">$${this.currentOrder ? Number.parseFloat(this.currentOrder.active_total || this.currentOrder.total || 0).toFixed(2) : '0.00'}</span>
                     </div>
                   </button>
-                  <button class="pos-action-btn transfer" onclick="POS.closeOrderModal('transfer')" 
+                  <button class="pos-action-btn transfer" onclick="POS.closeOrderModal('transfer')"
                           ${this.cart.length > 0 ? 'disabled' : ''} id="btn-close-transfer">
                     <div class="pos-action-btn-icon">📱</div>
                     <div class="pos-action-btn-text">
                       <span class="pos-action-btn-title">TRANSFER.</span>
                       <span class="pos-action-btn-sub">Pago digital</span>
+                    </div>
+                  </button>
+                  <button class="pos-action-btn mixed" onclick="POS.closeOrderModal('mixed')"
+                          ${this.cart.length > 0 ? 'disabled' : ''} id="btn-close-mixed">
+                    <div class="pos-action-btn-icon">💳</div>
+                    <div class="pos-action-btn-text">
+                      <span class="pos-action-btn-title">MIXTO</span>
+                      <span class="pos-action-btn-sub">Efect. + Trans.</span>
                     </div>
                   </button>
                 </div>
@@ -488,7 +518,7 @@ const POS = {
                   <span class="pos-action-btn-sub">Pago en efectivo</span>
                 </div>
               </button>
-              <button class="pos-action-btn transfer" onclick="POS.openPaymentModal('transfer')" 
+              <button class="pos-action-btn transfer" onclick="POS.openPaymentModal('transfer')"
                       ${this.cart.length === 0 ? 'disabled' : ''} id="btn-pay-transfer">
                 <div class="pos-action-btn-icon">📱</div>
                 <div class="pos-action-btn-text">
@@ -496,7 +526,49 @@ const POS = {
                   <span class="pos-action-btn-sub">Pago por transferencia</span>
                 </div>
               </button>
+              <button class="pos-action-btn mixed" onclick="POS.openPaymentModal('mixed')"
+                      ${this.cart.length === 0 ? 'disabled' : ''} id="btn-pay-mixed">
+                <div class="pos-action-btn-icon">💳</div>
+                <div class="pos-action-btn-text">
+                  <span class="pos-action-btn-title">PAGO MIXTO</span>
+                  <span class="pos-action-btn-sub">Efect. + Transf. (F4)</span>
+                </div>
+              </button>
             `}
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal: Nueva sub-cuenta -->
+      <div id="split-name-modal" class="modal-overlay">
+        <div class="modal-content" style="max-width:360px">
+          <div class="modal-header">
+            <h3 class="modal-title">✂️ Nueva sub-cuenta</h3>
+            <button class="modal-close" onclick="POS.cancelSplitModal()">✕</button>
+          </div>
+          <div style="padding:16px">
+            <p style="color:var(--text-muted);font-size:0.9rem;margin-bottom:12px;">Ingresa un nombre para identificar esta cuenta</p>
+            <input type="text" class="form-input" id="split-name-input"
+                   placeholder="Ej: Juan, Familia García, Mesa delantera"
+                   onkeydown="if(event.key==='Enter') POS.confirmCreateSplit()">
+            <div style="display:flex;gap:8px;margin-top:16px">
+              <button class="btn" style="flex:1;background:var(--bg-secondary);border:1px solid var(--border-color);" onclick="POS.cancelSplitModal()">Cancelar</button>
+              <button class="btn btn-primary" style="flex:1" onclick="POS.confirmCreateSplit()">✅ Crear cuenta</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal: Mover ítem entre cuentas -->
+      <div id="move-item-modal" class="modal-overlay">
+        <div class="modal-content" style="max-width:340px">
+          <div class="modal-header">
+            <h3 class="modal-title">→ Mover ítem</h3>
+            <button class="modal-close" onclick="POS.closeMoveItemModal()">✕</button>
+          </div>
+          <div style="padding:16px">
+            <p style="color:var(--text-muted);font-size:0.9rem;margin-bottom:12px;">Selecciona la cuenta destino:</p>
+            <div id="move-item-splits-list"></div>
           </div>
         </div>
       </div>
@@ -587,8 +659,48 @@ const POS = {
             <div id="payment-transfer-section" style="display:none">
               <div class="form-group">
                 <label class="form-label">Referencia</label>
-                <input type="text" class="form-input" id="payment-transfer-ref" 
+                <input type="text" class="form-input" id="payment-transfer-ref"
                        placeholder="Número de referencia">
+              </div>
+            </div>
+
+            <!-- Sección Pago Mixto -->
+            <div id="payment-mixed-section" style="display:none">
+              <div class="pay-input-row" style="margin-bottom:8px">
+                <label class="form-label" style="margin-bottom:4px;font-size:0.8rem">💵 Monto en Efectivo</label>
+                <div class="pay-input-wrapper">
+                  <span class="pay-input-currency">$</span>
+                  <input type="number" class="pay-input" id="mixed-cash-amount"
+                         step="0.01" min="0" placeholder="0.00"
+                         oninput="POS.onMixedCashInput()">
+                </div>
+              </div>
+              <div class="pay-input-row" style="margin-bottom:8px">
+                <label class="form-label" style="margin-bottom:4px;font-size:0.8rem">📱 Monto en Transferencia (resto)</label>
+                <div class="pay-input-wrapper">
+                  <span class="pay-input-currency">$</span>
+                  <input type="number" class="pay-input" id="mixed-transfer-amount"
+                         step="0.01" min="0" placeholder="0.00" readonly
+                         style="background:var(--bg-secondary);color:var(--text-muted)">
+                </div>
+              </div>
+              <div class="pay-input-row" style="margin-bottom:8px">
+                <label class="form-label" style="margin-bottom:4px;font-size:0.8rem">💵 Efectivo Recibido (para vuelto)</label>
+                <div class="pay-input-wrapper">
+                  <span class="pay-input-currency">$</span>
+                  <input type="number" class="pay-input" id="mixed-received"
+                         step="0.01" min="0" placeholder="0.00"
+                         oninput="POS.calculateMixedChange()">
+                  <button type="button" class="pay-exact-btn" onclick="POS.setMixedExactCash()" title="Pagar exacto en efectivo">=</button>
+                </div>
+              </div>
+              <div class="form-group" style="margin-bottom:8px">
+                <label class="form-label" style="font-size:0.8rem">Referencia Transferencia (opcional)</label>
+                <input type="text" class="form-input" id="mixed-transfer-ref" placeholder="Número de referencia">
+              </div>
+              <div class="pay-change-display" id="mixed-payment-change" style="display:none">
+                <span class="pay-change-label">Vuelto Efectivo</span>
+                <span class="pay-change-amount" id="mixed-payment-change-value">$0.00</span>
               </div>
             </div>
 
@@ -621,6 +733,457 @@ const POS = {
         </div>
       </div>
     `;
+  },
+
+  // ═══════════════════════════════════════════════════════
+  //  DIVISIÓN DE MESAS (TABLE SPLITTING)
+  // ═══════════════════════════════════════════════════════
+
+  /**
+   * Renderiza el panel de selección de sub-cuentas (split chooser)
+   */
+  renderSplitChooser(container) {
+    const table = this.currentTable;
+    const splits = this.currentSplits;
+    const grandTotal = splits.reduce((s, sp) => s + parseFloat(sp.total || 0), 0);
+
+    // Helper: genera botones de mover para un ítem dado el split origen
+    const renderMoveButtons = (item, sourceSplitId) => {
+      const targets = splits.filter(s => s.id !== sourceSplitId);
+      if (targets.length === 0) return '';
+      if (targets.length === 1) {
+        return `<button class="sc-item-move-btn" onclick="POS.moveItemInChooser(${item.id}, ${targets[0].id})"
+                        title="Mover a ${targets[0].split_name || 'otra cuenta'}">
+                  → ${targets[0].split_name || 'Cuenta'}
+                </button>`;
+      }
+      // Más de 2 cuentas destino: pequeño select
+      return `<select class="sc-item-move-select" onchange="if(this.value) POS.moveItemInChooser(${item.id}, parseInt(this.value))">
+                <option value="">→ Mover</option>
+                ${targets.map(t => `<option value="${t.id}">${t.split_name || `Cuenta ${t.id}`}</option>`).join('')}
+              </select>`;
+    };
+
+    container.innerHTML = `
+      <div class="split-chooser-view">
+        <!-- Header -->
+        <div class="split-chooser-header">
+          <button class="pos-breadcrumb-back" onclick="POS.backToMap()">
+            <span class="breadcrumb-back-icon">←</span>
+            <span>Mapa</span>
+          </button>
+          <div class="split-chooser-title">
+            <span class="split-chooser-mesa">✂️ ${table?.name || 'Mesa'}</span>
+            <span class="split-chooser-count">${splits.length} cuenta${splits.length !== 1 ? 's' : ''} activa${splits.length !== 1 ? 's' : ''}</span>
+          </div>
+          <div class="split-chooser-total">Total mesa: <strong>$${grandTotal.toFixed(2)}</strong></div>
+        </div>
+
+        <!-- Lista de sub-cuentas -->
+        <div class="split-list">
+          ${splits.map(sp => {
+            const total = parseFloat(sp.total || 0);
+            const items = Array.isArray(sp.items) ? sp.items : [];
+            const hasItems = items.length > 0;
+            return `
+            <div class="split-card">
+              <!-- Encabezado de la cuenta -->
+              <div class="split-card-header">
+                <div class="split-card-identity">
+                  <span class="split-card-avatar">👤</span>
+                  <span class="split-card-name">${sp.split_name || `Cuenta ${sp.id}`}</span>
+                  <span class="split-card-count">${items.length} ítem${items.length !== 1 ? 's' : ''}</span>
+                </div>
+                <span class="split-card-total ${total === 0 ? 'zero' : ''}">$${total.toFixed(2)}</span>
+              </div>
+
+              <!-- Ítems de la cuenta (visibles y movibles) -->
+              <div class="split-card-items-list">
+                ${hasItems ? items.map(item => {
+                  const pvp = parseFloat(item.subtotal) * (1 + parseFloat(item.tax_rate || 0) / 100);
+                  return `
+                  <div class="sc-item-row">
+                    <span class="sc-item-qty">${item.quantity}x</span>
+                    <span class="sc-item-name">${item.product_name}${item.modifiers ? ` <em>(${item.modifiers})</em>` : ''}</span>
+                    <span class="sc-item-price">$${pvp.toFixed(2)}</span>
+                    ${renderMoveButtons(item, sp.id)}
+                  </div>`;
+                }).join('') : `
+                  <div class="sc-empty-hint">Sin ítems — agrega productos para esta cuenta</div>`}
+              </div>
+
+              <!-- Acciones de la cuenta -->
+              <div class="split-card-footer">
+                <button class="sc-btn-add" onclick="POS.selectSplit(${sp.id})">
+                  ➕ Agregar ítems
+                </button>
+                <div class="sc-pay-group">
+                  <button class="sc-pay-btn cash" onclick="POS.openSplitPaymentModal('cash', ${sp.id})"
+                          ${!hasItems ? 'disabled title="Sin ítems para cobrar"' : 'title="Cobrar en efectivo"'}>
+                    💵 Efectivo
+                  </button>
+                  <button class="sc-pay-btn transfer" onclick="POS.openSplitPaymentModal('transfer', ${sp.id})"
+                          ${!hasItems ? 'disabled' : 'title="Cobrar por transferencia"'}>
+                    📱 Transfer.
+                  </button>
+                  <button class="sc-pay-btn mixed" onclick="POS.openSplitPaymentModal('mixed', ${sp.id})"
+                          ${!hasItems ? 'disabled' : 'title="Pago mixto"'}>
+                    💳 Mixto
+                  </button>
+                  ${!hasItems ? `
+                  <button class="sc-pay-btn delete" onclick="POS.confirmDeleteSplit(${sp.id})" title="Eliminar cuenta vacía">
+                    🗑️
+                  </button>` : ''}
+                </div>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>
+
+        <!-- Footer -->
+        <div class="split-chooser-footer">
+          ${splits.length < 6
+            ? `<button class="btn btn-primary" onclick="POS.showCreateSplitModal(true)">✂️ + Nueva sub-cuenta</button>`
+            : `<span style="color:var(--text-muted);font-size:0.85rem;">Máximo 6 cuentas alcanzado</span>`}
+        </div>
+      </div>
+
+      <!-- Modal: Nueva sub-cuenta (modo chooser) -->
+      <div id="split-name-modal" class="modal-overlay">
+        <div class="modal-content" style="max-width:360px">
+          <div class="modal-header">
+            <h3 class="modal-title">✂️ Nueva sub-cuenta</h3>
+            <button class="modal-close" onclick="POS.cancelSplitModal()">✕</button>
+          </div>
+          <div style="padding:16px">
+            <p style="color:var(--text-muted);font-size:0.9rem;margin-bottom:12px;">Ingresa un nombre para identificar esta cuenta</p>
+            <input type="text" class="form-input" id="split-name-input"
+                   placeholder="Ej: Juan, Familia García, Mesa delantera"
+                   onkeydown="if(event.key==='Enter') POS.confirmCreateSplit()">
+            <div style="display:flex;gap:8px;margin-top:16px">
+              <button class="btn" style="flex:1;background:var(--bg-secondary);border:1px solid var(--border-color);" onclick="POS.cancelSplitModal()">Cancelar</button>
+              <button class="btn btn-primary" style="flex:1" onclick="POS.confirmCreateSplit()">✅ Crear cuenta</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal de Pago para splits -->
+      <div class="modal-overlay payment-modal" id="payment-modal">
+        <div class="modal-content pay-modal-content">
+          <div class="pay-modal-header">
+            <div class="pay-modal-header-left">
+              <span class="pay-modal-icon" id="payment-modal-icon">💵</span>
+              <span class="pay-modal-title" id="payment-modal-title">Pago en Efectivo</span>
+            </div>
+            <button class="modal-close" onclick="POS.closePaymentModal()">✕</button>
+          </div>
+          <div class="pay-modal-body">
+            <div class="pay-order-summary" id="pay-order-summary" style="display:none">
+              <div class="pay-summary-label">📋 Detalle del consumo</div>
+              <div class="pay-summary-items" id="pay-summary-items"></div>
+            </div>
+            <div class="pay-total-display">
+              <span class="pay-total-label">TOTAL</span>
+              <span class="pay-total-amount" id="payment-total">$0.00</span>
+            </div>
+            <div id="payment-cash-section">
+              <div class="pay-input-row">
+                <label class="form-label" style="margin-bottom:4px;font-size:0.8rem">Monto Recibido</label>
+                <div class="pay-input-wrapper">
+                  <span class="pay-input-currency">$</span>
+                  <input type="number" class="pay-input" id="payment-received"
+                         step="0.01" min="0" placeholder="0.00" oninput="POS.calculateChange()">
+                  <button type="button" class="pay-exact-btn" onclick="POS.setExactAmount()" title="Valor justo">=</button>
+                </div>
+              </div>
+              <div class="pay-denomination-row">
+                <span class="pay-denom-label">💵 Billetes</span>
+                <div class="pay-denom-buttons">
+                  <button type="button" class="pay-denom-btn bill" onclick="POS.addCashAmount(1)">$1</button>
+                  <button type="button" class="pay-denom-btn bill" onclick="POS.addCashAmount(5)">$5</button>
+                  <button type="button" class="pay-denom-btn bill accent-green" onclick="POS.addCashAmount(10)">$10</button>
+                  <button type="button" class="pay-denom-btn bill accent-blue" onclick="POS.addCashAmount(20)">$20</button>
+                  <button type="button" class="pay-denom-btn bill accent-purple" onclick="POS.addCashAmount(50)">$50</button>
+                  <button type="button" class="pay-denom-btn bill accent-gold" onclick="POS.addCashAmount(100)">$100</button>
+                </div>
+              </div>
+              <div class="pay-change-display" id="payment-change" style="display:none">
+                <span class="pay-change-label">Vuelto</span>
+                <span class="pay-change-amount" id="payment-change-value">$0.00</span>
+              </div>
+              <button type="button" class="pay-clear-amount" onclick="POS.clearCashAmount()" id="pay-clear-btn" style="display:none">
+                🗑️ Limpiar monto
+              </button>
+            </div>
+            <div id="payment-transfer-section" style="display:none">
+              <div class="form-group">
+                <label class="form-label">Referencia</label>
+                <input type="text" class="form-input" id="payment-transfer-ref" placeholder="Número de referencia">
+              </div>
+            </div>
+            <div id="payment-mixed-section" style="display:none">
+              <div class="pay-input-row" style="margin-bottom:8px">
+                <label class="form-label" style="margin-bottom:4px;font-size:0.8rem">💵 Monto en Efectivo</label>
+                <div class="pay-input-wrapper">
+                  <span class="pay-input-currency">$</span>
+                  <input type="number" class="pay-input" id="mixed-cash-amount"
+                         step="0.01" min="0" placeholder="0.00" oninput="POS.onMixedCashInput()">
+                </div>
+              </div>
+              <div class="pay-input-row" style="margin-bottom:8px">
+                <label class="form-label" style="margin-bottom:4px;font-size:0.8rem">📱 Monto en Transferencia (resto)</label>
+                <div class="pay-input-wrapper">
+                  <span class="pay-input-currency">$</span>
+                  <input type="number" class="pay-input" id="mixed-transfer-amount"
+                         step="0.01" min="0" placeholder="0.00" readonly
+                         style="background:var(--bg-secondary);color:var(--text-muted)">
+                </div>
+              </div>
+              <div class="pay-input-row" style="margin-bottom:8px">
+                <label class="form-label" style="margin-bottom:4px;font-size:0.8rem">💵 Efectivo Recibido (para vuelto)</label>
+                <div class="pay-input-wrapper">
+                  <span class="pay-input-currency">$</span>
+                  <input type="number" class="pay-input" id="mixed-received"
+                         step="0.01" min="0" placeholder="0.00" oninput="POS.calculateMixedChange()">
+                  <button type="button" class="pay-exact-btn" onclick="POS.setMixedExactCash()" title="Pagar exacto">=</button>
+                </div>
+              </div>
+              <div class="form-group" style="margin-bottom:8px">
+                <label class="form-label" style="font-size:0.8rem">Referencia Transferencia (opcional)</label>
+                <input type="text" class="form-input" id="mixed-transfer-ref" placeholder="Número de referencia">
+              </div>
+              <div class="pay-change-display" id="mixed-payment-change" style="display:none">
+                <span class="pay-change-label">Vuelto Efectivo</span>
+                <span class="pay-change-amount" id="mixed-payment-change-value">$0.00</span>
+              </div>
+            </div>
+            <details class="pay-client-details">
+              <summary class="pay-client-summary">👤 Datos del cliente (opcional)</summary>
+              <div class="pay-client-fields">
+                <div class="form-group">
+                  <label class="form-label">Cliente</label>
+                  <input type="text" class="form-input" id="payment-customer-name" placeholder="Nombre" value="CONSUMIDOR FINAL">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">CI/RUC</label>
+                  <input type="text" class="form-input" id="payment-customer-id" placeholder="9999999999999">
+                </div>
+              </div>
+            </details>
+          </div>
+          <div class="pay-modal-footer">
+            <button class="pay-cancel-btn" onclick="POS.closePaymentModal()">Cancelar</button>
+            <button class="pay-confirm-btn" onclick="POS.processSale()" id="btn-process-sale">
+              <span class="pay-confirm-icon">✅</span>
+              <span class="pay-confirm-text">Procesar Venta</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  },
+
+  /**
+   * Abre una sub-cuenta para gestionarla (agregar ítems, ver orden)
+   */
+  async selectSplit(splitId) {
+    const split = this.currentSplits.find(s => s.id === splitId);
+    if (!split) return;
+
+    this.currentOrder = null;
+    this.cart = [];
+    this.mode = 'ordering';
+
+    try {
+      const res = await API.get(`/pos/sales/${splitId}`);
+      if (res && res.data) {
+        this.currentOrder = { ...this.currentTable, ...res.data };
+      }
+    } catch (err) {
+      console.error(err);
+    }
+
+    this.render(this.container);
+  },
+
+  /**
+   * Muestra el modal de nombre para crear una sub-cuenta
+   * @param {boolean} fromChooser - si se llama desde el chooser (no desde ordering)
+   */
+  showCreateSplitModal(fromChooser = false) {
+    this._splitModalFromChooser = fromChooser;
+    const modal = document.getElementById('split-name-modal');
+    if (!modal) return;
+    modal.classList.add('active');
+    document.getElementById('split-name-input').value = '';
+    setTimeout(() => document.getElementById('split-name-input')?.focus(), 200);
+  },
+
+  cancelSplitModal() {
+    const modal = document.getElementById('split-name-modal');
+    if (modal) modal.classList.remove('active');
+  },
+
+  /**
+   * Confirma la creación de una sub-cuenta
+   */
+  async confirmCreateSplit() {
+    const nameInput = document.getElementById('split-name-input');
+    const name = nameInput?.value?.trim();
+    if (!name) { Toast.warning('Ingresa un nombre para la cuenta'); return; }
+
+    try {
+      const res = await API.post(`/pos/tables/${this.currentTable.id}/splits`, { splitName: name });
+      if (res && res.success) {
+        this.currentSplits = res.data || [];
+        Toast.success(`✅ Cuenta "${name}" creada`);
+        this.cancelSplitModal();
+        // Recargar datos de la mesa y siempre ir al chooser
+        await this.loadData();
+        const freshTable = this.tables.find(t => t.id === this.currentTable.id);
+        if (freshTable) this.currentTable = freshTable;
+        this.mode = 'split-chooser';
+        this.currentOrder = null;
+        this.render(this.container);
+      }
+    } catch (err) {
+      Toast.error(err.message || 'Error al crear cuenta');
+    }
+  },
+
+  /**
+   * Abre el modal de pago para una sub-cuenta específica del split-chooser
+   */
+  openSplitPaymentModal(method, splitId) {
+    const split = this.currentSplits.find(s => s.id === splitId);
+    if (!split) return;
+
+    // Configurar currentOrder apuntando a este split
+    this.currentOrder = { ...this.currentTable, ...split, id: splitId };
+    this.isClosingOrder = true;
+    this._payingSplitId = splitId;
+    this.openPaymentModal(method, true);
+  },
+
+  /**
+   * Después de pagar una sub-cuenta: actualizar chooser o liberar mesa
+   */
+  async afterSplitPaid() {
+    await this.loadData();
+    const freshTable = this.tables.find(t => t.id === this.currentTable?.id);
+
+    if (freshTable && parseInt(freshTable.active_split_count) > 0) {
+      // Quedan sub-cuentas: volver al chooser
+      this.currentTable = freshTable;
+      try {
+        const res = await API.get(`/pos/tables/${freshTable.id}/splits`);
+        this.currentSplits = res.data || [];
+      } catch (e) {
+        this.currentSplits = [];
+      }
+      this.mode = 'split-chooser';
+      this.currentOrder = null;
+    } else {
+      // Mesa libre
+      this.mode = 'table-map';
+      this.currentTable = null;
+      this.currentOrder = null;
+      this.currentSplits = [];
+    }
+    this.cart = [];
+    this._payingSplitId = null;
+    this.render(this.container);
+  },
+
+  /**
+   * Confirma eliminación de una sub-cuenta vacía
+   */
+  async confirmDeleteSplit(splitId) {
+    if (!confirm('¿Eliminar esta sub-cuenta vacía?')) return;
+    try {
+      const res = await API.delete(`/pos/splits/${splitId}`);
+      if (res && res.success) {
+        Toast.success('Sub-cuenta eliminada');
+        // Recargar splits
+        const r = await API.get(`/pos/tables/${this.currentTable.id}/splits`);
+        this.currentSplits = r.data || [];
+        if (this.currentSplits.length === 0) {
+          // Quedó sin splits → volver al mapa
+          this.backToMap();
+        } else {
+          this.render(this.container);
+        }
+      }
+    } catch (err) {
+      Toast.error(err.message || 'Error al eliminar cuenta');
+    }
+  },
+
+  /**
+   * Muestra mini-menú para mover ítem a otra sub-cuenta
+   */
+  showMoveItemMenu(itemId, btnEl) {
+    this._movingItemId = itemId;
+    const modal = document.getElementById('move-item-modal');
+    if (!modal) return;
+
+    const otherSplits = this.currentSplits.filter(s => s.id !== this.currentOrder?.id);
+    const listEl = document.getElementById('move-item-splits-list');
+    if (listEl) {
+      listEl.innerHTML = otherSplits.map(sp => `
+        <button class="split-move-option" onclick="POS.moveItem(${itemId}, ${sp.id})">
+          👤 ${sp.split_name || `Cuenta ${sp.id}`}
+          <span style="margin-left:auto;color:var(--text-muted);font-size:0.8rem">$${parseFloat(sp.total || 0).toFixed(2)}</span>
+        </button>
+      `).join('');
+    }
+
+    modal.classList.add('active');
+  },
+
+  closeMoveItemModal() {
+    const modal = document.getElementById('move-item-modal');
+    if (modal) modal.classList.remove('active');
+    this._movingItemId = null;
+  },
+
+  /**
+   * Mueve un ítem a otra sub-cuenta (desde el ordering panel)
+   */
+  async moveItem(itemId, targetSaleId) {
+    this.closeMoveItemModal();
+    try {
+      await API.patch(`/pos/split-items/${itemId}/move`, { targetSaleId });
+      Toast.success('Ítem movido');
+      const r = await API.get(`/pos/tables/${this.currentTable.id}/splits`);
+      this.currentSplits = r.data || [];
+      if (this.currentOrder?.id) {
+        await this.selectSplit(this.currentOrder.id);
+      }
+    } catch (err) {
+      Toast.error(err.message || 'Error al mover ítem');
+    }
+  },
+
+  /**
+   * Mueve un ítem directamente desde el split-chooser (sin entrar al ordering)
+   */
+  async moveItemInChooser(itemId, targetSaleId) {
+    try {
+      await API.patch(`/pos/split-items/${itemId}/move`, { targetSaleId });
+      // Refrescar splits y re-renderizar el chooser
+      const r = await API.get(`/pos/tables/${this.currentTable.id}/splits`);
+      this.currentSplits = r.data || [];
+      // Actualizar también la mesa
+      await this.loadData();
+      const freshTable = this.tables.find(t => t.id === this.currentTable.id);
+      if (freshTable) this.currentTable = freshTable;
+      this.render(this.container);
+      Toast.success('Ítem movido');
+    } catch (err) {
+      Toast.error(err.message || 'Error al mover ítem');
+    }
   },
 
   /**
@@ -1025,6 +1588,7 @@ const POS = {
     const clearBtn = document.querySelector('.pos-ticket-clear');
     const cashBtn = document.getElementById('btn-pay-cash');
     const transferBtn = document.getElementById('btn-pay-transfer');
+    const mixedBtn = document.getElementById('btn-pay-mixed');
     const sendKitchenBtn = document.getElementById('btn-send-kitchen');
     const addItemsBtn = document.getElementById('btn-add-items');
     const newItemsHeader = document.getElementById('pos-new-items-header');
@@ -1040,6 +1604,7 @@ const POS = {
     if (clearBtn) clearBtn.style.display = this.cart.length > 0 ? '' : 'none';
     if (cashBtn) cashBtn.disabled = this.cart.length === 0;
     if (transferBtn) transferBtn.disabled = this.cart.length === 0;
+    if (mixedBtn) mixedBtn.disabled = this.cart.length === 0;
     if (sendKitchenBtn) sendKitchenBtn.disabled = this.cart.length === 0;
     if (addItemsBtn) addItemsBtn.disabled = this.cart.length === 0;
     if (newItemsHeader) newItemsHeader.style.display = this.cart.length > 0 ? '' : 'none';
@@ -1048,6 +1613,7 @@ const POS = {
     // y actualizar el monto del botón EFECTIVO
     const closeOrderBtn = document.getElementById('btn-close-order');
     const closeTransferBtn = document.getElementById('btn-close-transfer');
+    const closeMixedBtn = document.getElementById('btn-close-mixed');
     if (closeOrderBtn) {
       closeOrderBtn.disabled = this.cart.length > 0;
       // Actualizar monto: total orden + nuevos items del carrito
@@ -1058,6 +1624,7 @@ const POS = {
       if (subEl) subEl.textContent = `$${grandTotal.toFixed(2)}`;
     }
     if (closeTransferBtn) closeTransferBtn.disabled = this.cart.length > 0;
+    if (closeMixedBtn) closeMixedBtn.disabled = this.cart.length > 0;
 
     // Update mobile FAB badge
     const fabBadge = document.getElementById('fab-cart-count');
@@ -1175,18 +1742,35 @@ const POS = {
 
     this.paymentMethod = method;
     this.isClosingOrder = isClosingOrder;
-    const totalToPay = isClosingOrder && this.currentOrder
-      ? parseFloat(this.currentOrder.total)
-      : this.calculateTotals().total;
+
+    // Determinar total a pagar
+    // Si estamos pagando un split específico (_payingSplitId), usar el total del split
+    const splitBeingPaid = this._payingSplitId
+      ? this.currentSplits.find(s => s.id === this._payingSplitId)
+      : null;
+    const totalToPay = splitBeingPaid
+      ? parseFloat(splitBeingPaid.total || 0)
+      : (isClosingOrder && this.currentOrder
+          ? parseFloat(this.currentOrder.total)
+          : this.calculateTotals().total);
 
     document.getElementById('payment-total').textContent = `$${totalToPay.toFixed(2)}`;
-    document.getElementById('payment-modal-title').textContent =
-      method === 'cash' ? 'Pago en Efectivo' : 'Pago por Transferencia';
-    document.getElementById('payment-modal-icon').textContent =
-      method === 'cash' ? '💵' : '📱';
+    const titles = { cash: 'Pago en Efectivo', transfer: 'Pago por Transferencia', mixed: 'Pago Mixto' };
+    const icons  = { cash: '💵', transfer: '📱', mixed: '💳' };
+    document.getElementById('payment-modal-title').textContent = titles[method] || titles.cash;
+    document.getElementById('payment-modal-icon').textContent  = icons[method]  || icons.cash;
 
-    document.getElementById('payment-cash-section').style.display = method === 'cash' ? '' : 'none';
+    document.getElementById('payment-cash-section').style.display     = method === 'cash'     ? '' : 'none';
     document.getElementById('payment-transfer-section').style.display = method === 'transfer' ? '' : 'none';
+    document.getElementById('payment-mixed-section').style.display    = method === 'mixed'    ? '' : 'none';
+
+    if (method === 'mixed') {
+      document.getElementById('mixed-cash-amount').value = '';
+      document.getElementById('mixed-transfer-amount').value = '';
+      document.getElementById('mixed-received').value = '';
+      document.getElementById('mixed-transfer-ref').value = '';
+      document.getElementById('mixed-payment-change').style.display = 'none';
+    }
 
     // Mostrar resumen de consumo cuando es cierre de orden dine-in
     const summaryEl = document.getElementById('pay-order-summary');
@@ -1230,16 +1814,15 @@ const POS = {
     // Focus solo en desktop (en mobile el teclado tapa la pantalla)
     if (window.innerWidth > 768) {
       setTimeout(() => {
-        const input = method === 'cash'
-          ? document.getElementById('payment-received')
-          : document.getElementById('payment-transfer-ref');
-        if (input) input.focus();
+        const focusMap = { cash: 'payment-received', transfer: 'payment-transfer-ref', mixed: 'mixed-cash-amount' };
+        document.getElementById(focusMap[method] || 'payment-received')?.focus();
       }, 300);
     }
   },
 
   closePaymentModal() {
-    document.getElementById('payment-modal').classList.remove('active');
+    document.getElementById('payment-modal')?.classList.remove('active');
+    this._payingSplitId = null;
   },
 
   /**
@@ -1274,9 +1857,7 @@ const POS = {
    * Pone el valor justo (exacto al total)
    */
   setExactAmount() {
-    const totalToPay = (this.orderType === 'dine_in' && this.currentOrder)
-      ? parseFloat(this.currentOrder.total)
-      : this.calculateTotals().total;
+    const totalToPay = this._getCurrentTotal();
     const input = document.getElementById('payment-received');
     if (input) {
       input.value = totalToPay.toFixed(2);
@@ -1290,10 +1871,7 @@ const POS = {
    * Calcula el cambio
    */
   calculateChange() {
-    const isClosingOrder = this.orderType === 'dine_in' && this.currentOrder;
-    const totalToPay = isClosingOrder
-      ? parseFloat(this.currentOrder.total)
-      : this.calculateTotals().total;
+    const totalToPay = this._getCurrentTotal();
     const received = parseFloat(document.getElementById('payment-received').value) || 0;
     const change = received - totalToPay;
     const changeEl = document.getElementById('payment-change');
@@ -1312,6 +1890,59 @@ const POS = {
   },
 
   /**
+   * Retorna el total a pagar en el modal actual
+   * Considera splits, cierre de orden y takeaway
+   */
+  _getCurrentTotal() {
+    const splitBeingPaid = this._payingSplitId
+      ? this.currentSplits.find(s => s.id === this._payingSplitId)
+      : null;
+    if (splitBeingPaid) return parseFloat(splitBeingPaid.total || 0);
+    const isClosingOrder = this.orderType === 'dine_in' && this.currentOrder;
+    return isClosingOrder ? parseFloat(this.currentOrder.total) : this.calculateTotals().total;
+  },
+
+  /**
+   * Calcula la porción transferencia al escribir la porción efectivo (pago mixto)
+   */
+  onMixedCashInput() {
+    const totalToPay = this._getCurrentTotal();
+
+    const cashVal = parseFloat(document.getElementById('mixed-cash-amount').value) || 0;
+    const transferVal = Math.max(0, totalToPay - cashVal);
+    document.getElementById('mixed-transfer-amount').value = transferVal.toFixed(2);
+    this.calculateMixedChange();
+  },
+
+  /**
+   * Calcula el vuelto sobre la porción efectivo del pago mixto
+   */
+  calculateMixedChange() {
+    const cashPortion = parseFloat(document.getElementById('mixed-cash-amount').value) || 0;
+    const received    = parseFloat(document.getElementById('mixed-received').value) || 0;
+    const change = received - cashPortion;
+    const changeEl    = document.getElementById('mixed-payment-change');
+    const changeValue = document.getElementById('mixed-payment-change-value');
+
+    if (received > 0) {
+      changeEl.style.display = '';
+      changeValue.textContent = `$${Math.max(0, change).toFixed(2)}`;
+      changeValue.className = `pay-change-amount ${change >= 0 ? 'positive' : 'negative'}`;
+    } else {
+      changeEl.style.display = 'none';
+    }
+  },
+
+  /**
+   * Establece efectivo recibido igual a la porción efectivo (pago exacto sin vuelto)
+   */
+  setMixedExactCash() {
+    const cashPortion = parseFloat(document.getElementById('mixed-cash-amount').value) || 0;
+    document.getElementById('mixed-received').value = cashPortion.toFixed(2);
+    this.calculateMixedChange();
+  },
+
+  /**
    * Selecciona una mesa
    */
   async selectTable(tableId) {
@@ -1325,10 +1956,29 @@ const POS = {
 
     this.currentTable = table;
     this.orderType = 'dine_in';
-    this.mode = 'ordering';
     this.cart = [];
 
-    // Si tiene orden abierta, cargar sus datos
+    const splitCount = parseInt(table.active_split_count) || 0;
+
+    // Mesa con múltiples sub-cuentas → ir al chooser
+    if (splitCount > 1) {
+      try {
+        const res = await API.get(`/pos/tables/${tableId}/splits`);
+        this.currentSplits = res.data || [];
+      } catch (err) {
+        console.error(err);
+        this.currentSplits = [];
+      }
+      this.currentOrder = null;
+      this.mode = 'split-chooser';
+      this.render(this.container);
+      return;
+    }
+
+    // Mesa normal (0 o 1 pending sale)
+    this.mode = 'ordering';
+    this.currentSplits = [];
+
     if (table.active_sale_id) {
       try {
         const res = await API.get(`/pos/sales/${table.active_sale_id}`);
@@ -1371,8 +2021,27 @@ const POS = {
     this.cart = [];
     this.currentTable = null;
     this.currentOrder = null;
+    this.currentSplits = [];
     this.orderType = null;
     await this.loadData();
+    this.render(this.container);
+  },
+
+  /**
+   * Vuelve al chooser de splits sin salir al mapa
+   */
+  async backToSplitChooser() {
+    if (this.cart.length > 0) {
+      if (!confirm('Hay items en el carrito sin enviar. ¿Deseas descartarlos y volver a las cuentas?')) return;
+    }
+    this.cart = [];
+    this.currentOrder = null;
+    this.mode = 'split-chooser';
+    // Refrescar splits
+    try {
+      const res = await API.get(`/pos/tables/${this.currentTable.id}/splits`);
+      this.currentSplits = res.data || [];
+    } catch (e) { /* ok */ }
     this.render(this.container);
   },
 
@@ -1450,7 +2119,15 @@ const POS = {
       if (res && res.success) {
         Toast.success(`✅ Items agregados al pedido`);
         this.cart = [];
-        await this.selectTable(this.currentTable.id); // Reload
+        const orderId = this.currentOrder.id;
+        // Si estamos dentro de un split, recargar solo el split actual
+        if (this.currentSplits.length > 0) {
+          const r = await API.get(`/pos/tables/${this.currentTable.id}/splits`);
+          this.currentSplits = r.data || [];
+          await this.selectSplit(orderId);
+        } else {
+          await this.selectTable(this.currentTable.id);
+        }
       }
     } catch (err) {
       Toast.error(err.message || 'Error al agregar items');
@@ -1476,11 +2153,31 @@ const POS = {
     const isClosingOrder = this.orderType === 'dine_in' && this.currentOrder;
 
     // Validaciones
+    const totalToPay = this._getCurrentTotal();
+
     if (this.paymentMethod === 'cash') {
       const received = parseFloat(document.getElementById('payment-received').value) || 0;
-      const totalToPay = isClosingOrder ? parseFloat(this.currentOrder.total) : total;
       if (received < totalToPay) {
         Toast.warning('El monto recibido es menor al total');
+        return;
+      }
+    }
+
+    if (this.paymentMethod === 'mixed') {
+      const cashPortion     = parseFloat(document.getElementById('mixed-cash-amount').value) || 0;
+      const transferPortion = parseFloat(document.getElementById('mixed-transfer-amount').value) || 0;
+      const received        = parseFloat(document.getElementById('mixed-received').value) || 0;
+
+      if (cashPortion <= 0 || transferPortion <= 0) {
+        Toast.warning('Ingrese los montos para efectivo y transferencia');
+        return;
+      }
+      if (Math.abs((cashPortion + transferPortion) - totalToPay) > 0.01) {
+        Toast.warning(`La suma ($${(cashPortion + transferPortion).toFixed(2)}) no coincide con el total ($${totalToPay.toFixed(2)})`);
+        return;
+      }
+      if (received < cashPortion) {
+        Toast.warning('El efectivo recibido es menor al monto en efectivo del pago mixto');
         return;
       }
     }
@@ -1490,24 +2187,40 @@ const POS = {
 
     try {
       if (isClosingOrder) {
-        // Cerrar orden existente
+        // Cerrar orden existente (o sub-cuenta de split)
         const closeData = {
           paymentMethod: this.paymentMethod,
           amountReceived: this.paymentMethod === 'cash'
             ? parseFloat(document.getElementById('payment-received').value)
-            : parseFloat(this.currentOrder.total),
+            : this.paymentMethod === 'mixed'
+              ? parseFloat(document.getElementById('mixed-received').value)
+              : parseFloat(this.currentOrder.total),
           transferRef: this.paymentMethod === 'transfer'
             ? document.getElementById('payment-transfer-ref').value
-            : null,
+            : this.paymentMethod === 'mixed'
+              ? document.getElementById('mixed-transfer-ref').value
+              : null,
+          cashAmount: this.paymentMethod === 'mixed'
+            ? parseFloat(document.getElementById('mixed-cash-amount').value)
+            : undefined,
+          transferAmount: this.paymentMethod === 'mixed'
+            ? parseFloat(document.getElementById('mixed-transfer-amount').value)
+            : undefined,
           customerName: document.getElementById('payment-customer-name').value || 'CONSUMIDOR FINAL',
           customerIdNumber: document.getElementById('payment-customer-id').value || '9999999999999',
         };
 
         const res = await API.post(`/pos/orders/${this.currentOrder.id}/close`, closeData);
         if (res && res.success) {
-          Toast.success(`✅ Cuenta cerrada - ${this.currentOrder.sale_number} - $${parseFloat(res.data.total).toFixed(2)}`);
+          const splitName = this.currentOrder.split_name;
+          Toast.success(`✅ Cuenta cerrada${splitName ? ` · ${splitName}` : ''} - $${parseFloat(res.data.total).toFixed(2)}`);
           this.closePaymentModal();
-          this.backToMap();
+          // Si hay splits activos en la mesa, volver al chooser; si no, al mapa
+          if (this.currentSplits.length > 0) {
+            await this.afterSplitPaid();
+          } else {
+            this.backToMap();
+          }
         }
       } else {
         // Venta takeaway inmediata
@@ -1525,10 +2238,20 @@ const POS = {
           paymentMethod: this.paymentMethod,
           amountReceived: this.paymentMethod === 'cash'
             ? parseFloat(document.getElementById('payment-received').value)
-            : total,
+            : this.paymentMethod === 'mixed'
+              ? parseFloat(document.getElementById('mixed-received').value)
+              : total,
           transferRef: this.paymentMethod === 'transfer'
             ? document.getElementById('payment-transfer-ref').value
-            : null,
+            : this.paymentMethod === 'mixed'
+              ? document.getElementById('mixed-transfer-ref').value
+              : null,
+          cashAmount: this.paymentMethod === 'mixed'
+            ? parseFloat(document.getElementById('mixed-cash-amount').value)
+            : undefined,
+          transferAmount: this.paymentMethod === 'mixed'
+            ? parseFloat(document.getElementById('mixed-transfer-amount').value)
+            : undefined,
           customerName: document.getElementById('payment-customer-name').value || 'CONSUMIDOR FINAL',
           customerIdNumber: document.getElementById('payment-customer-id').value || '9999999999999',
         };
@@ -1972,18 +2695,18 @@ const POS = {
 
       if (e.key === 'F2') {
         e.preventDefault();
-        if (this.cart.length > 0) this.openPaymentModal('cash');
+        if (this.cart.length > 0 || (this.orderType === 'dine_in' && this.currentOrder)) this.openPaymentModal('cash');
       }
       if (e.key === 'F3') {
         e.preventDefault();
-        if (this.cart.length > 0) this.openPaymentModal('transfer');
-      }
-      if (e.key === 'Escape') {
-        this.closePaymentModal();
+        if (this.cart.length > 0 || (this.orderType === 'dine_in' && this.currentOrder)) this.openPaymentModal('transfer');
       }
       if (e.key === 'F4') {
         e.preventDefault();
-        document.getElementById('pos-search')?.focus();
+        if (this.cart.length > 0 || (this.orderType === 'dine_in' && this.currentOrder)) this.openPaymentModal('mixed');
+      }
+      if (e.key === 'Escape') {
+        this.closePaymentModal();
       }
     });
   },

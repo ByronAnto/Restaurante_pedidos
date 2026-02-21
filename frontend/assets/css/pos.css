@@ -2244,6 +2244,22 @@
     color: #f59e0b;
 }
 
+.fp-table-badge.split {
+    background: rgba(139, 92, 246, 0.15);
+    color: #8b5cf6;
+}
+
+.fp-split-icon {
+    font-size: 0.65rem;
+    background: rgba(139, 92, 246, 0.15);
+    color: #8b5cf6;
+    padding: 1px 5px;
+    border-radius: 6px;
+    font-weight: 700;
+    margin-top: 2px;
+    display: block;
+}
+
 /* ─── Chair Elements ─── */
 
 /* Square / Rect: top & bottom rows */
@@ -2541,6 +2557,17 @@
     box-shadow: 0 8px 20px rgba(59, 130, 246, 0.4);
 }
 
+.pos-action-btn.mixed {
+    background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+    color: white;
+    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.25);
+}
+
+.pos-action-btn.mixed:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(139, 92, 246, 0.4);
+}
+
 /* Disabled state */
 .pos-action-btn:disabled {
     opacity: 0.35;
@@ -2671,5 +2698,539 @@
     .period-bar-right {
         width: 100%;
         justify-content: space-between;
+    }
+}
+
+/* ═══════════════════════════════════════════════════════
+   DIVISIÓN DE MESAS (TABLE SPLITTING)
+   ═══════════════════════════════════════════════════════ */
+
+/* ─── Split Chooser View ─── */
+.split-chooser-view {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - var(--header-height));
+    background: var(--bg-primary);
+}
+
+.split-chooser-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    padding: var(--space-md) var(--space-lg);
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+
+.split-chooser-title {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 120px;
+}
+
+.split-chooser-mesa {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.split-chooser-count {
+    font-size: 0.78rem;
+    color: #8b5cf6;
+    font-weight: 600;
+}
+
+.split-chooser-total {
+    font-size: 0.95rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.split-chooser-total strong {
+    color: var(--accent-primary);
+    font-size: 1.05rem;
+}
+
+/* ─── Split List: CSS Grid auto-adaptable ─── */
+.split-list {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: var(--space-md) var(--space-lg);
+    /* Grid: columnas de mínimo 270px, máx 1fr.
+       auto-fit colapsa huecos → 2 ítems = 2 cols, 3 = 3 cols, etc. */
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 270px), 1fr));
+    grid-auto-rows: min-content;  /* cada fila toma la altura de su contenido */
+    align-content: start;
+    gap: var(--space-md);
+    -webkit-overflow-scrolling: touch;
+}
+
+/* ─── Split Card: ocupa su celda en el grid ─── */
+.split-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    display: flex;
+    flex-direction: column;
+    /* align-self: stretch hace que todas las cards de una fila tengan la misma altura */
+    align-self: stretch;
+}
+
+/* ─── Card Header ─── */
+.split-card-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: 12px var(--space-lg);
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.split-card-identity {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+}
+
+.split-card-avatar {
+    font-size: 1.2rem;
+    flex-shrink: 0;
+}
+
+.split-card-name {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.split-card-count {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    background: var(--bg-primary);
+    padding: 1px 8px;
+    border-radius: 10px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.split-card-total {
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: var(--accent-primary);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.split-card-total.zero {
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+/* ─── Items list inside card ─── */
+.split-card-items-list {
+    padding: 4px 0;
+    flex: 1;          /* ocupa el espacio disponible → footer al fondo */
+    overflow-y: auto;
+    max-height: calc(100vh - 280px); /* evita que una cuenta muy larga rompa el layout */
+}
+
+.sc-item-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px var(--space-lg);
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    transition: background 0.1s ease;
+}
+
+.sc-item-row:last-child {
+    border-bottom: none;
+}
+
+.sc-item-row:hover {
+    background: var(--bg-hover);
+}
+
+.sc-item-qty {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #8b5cf6;
+    min-width: 22px;
+    flex-shrink: 0;
+}
+
+.sc-item-name {
+    flex: 1;
+    font-size: 0.88rem;
+    color: var(--text-primary);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sc-item-name em {
+    color: var(--text-muted);
+    font-style: normal;
+    font-size: 0.78rem;
+}
+
+.sc-item-price {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    font-weight: 600;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+/* ─── Botón mover ítem dentro del chooser ─── */
+.sc-item-move-btn {
+    background: rgba(139,92,246,0.12);
+    border: 1px solid rgba(139,92,246,0.3);
+    color: #8b5cf6;
+    border-radius: 8px;
+    padding: 4px 10px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: all 0.15s ease;
+    min-height: 30px;
+}
+
+.sc-item-move-btn:hover {
+    background: rgba(139,92,246,0.22);
+    transform: translateX(2px);
+}
+
+/* Select mover ítem (3+ cuentas) */
+.sc-item-move-select {
+    background: rgba(139,92,246,0.12);
+    border: 1px solid rgba(139,92,246,0.3);
+    color: #8b5cf6;
+    border-radius: 8px;
+    padding: 4px 8px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    flex-shrink: 0;
+    min-height: 30px;
+    outline: none;
+}
+
+/* Hint de cuenta vacía */
+.sc-empty-hint {
+    padding: 14px var(--space-lg);
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    font-style: italic;
+    text-align: center;
+}
+
+/* ─── Card Footer (acciones) ─── */
+.split-card-footer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px var(--space-lg);
+    border-top: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    flex-wrap: wrap;
+}
+
+/* Botón "Agregar ítems" */
+.sc-btn-add {
+    background: rgba(99,102,241,0.1);
+    border: 1px solid rgba(99,102,241,0.3);
+    color: #6366f1;
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s ease;
+    min-height: 38px;
+}
+
+.sc-btn-add:hover {
+    background: rgba(99,102,241,0.2);
+}
+
+/* Grupo de botones de pago */
+.sc-pay-group {
+    display: flex;
+    gap: 6px;
+    margin-left: auto;
+    flex-wrap: wrap;
+}
+
+.sc-pay-btn {
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+    min-height: 38px;
+}
+
+.sc-pay-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+    transform: none !important;
+}
+
+.sc-pay-btn.cash {
+    background: rgba(16,185,129,0.1);
+    border-color: rgba(16,185,129,0.35);
+    color: #10b981;
+}
+.sc-pay-btn.cash:not(:disabled):hover { background: rgba(16,185,129,0.2); }
+
+.sc-pay-btn.transfer {
+    background: rgba(59,130,246,0.1);
+    border-color: rgba(59,130,246,0.35);
+    color: #3b82f6;
+}
+.sc-pay-btn.transfer:not(:disabled):hover { background: rgba(59,130,246,0.2); }
+
+.sc-pay-btn.mixed {
+    background: rgba(139,92,246,0.1);
+    border-color: rgba(139,92,246,0.35);
+    color: #8b5cf6;
+}
+.sc-pay-btn.mixed:not(:disabled):hover { background: rgba(139,92,246,0.2); }
+
+.sc-pay-btn.delete {
+    background: rgba(239,68,68,0.1);
+    border-color: rgba(239,68,68,0.35);
+    color: #ef4444;
+    padding: 8px 10px;
+}
+.sc-pay-btn.delete:not(:disabled):hover { background: rgba(239,68,68,0.2); }
+
+/* ─── Split Chooser Footer ─── */
+.split-chooser-footer {
+    padding: var(--space-md) var(--space-lg);
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+/* ─── Botón dividir mesa (en ordering panel) ─── */
+.pos-action-btn.split-btn {
+    background: linear-gradient(135deg, #7c3aed, #5b21b6);
+    color: white;
+}
+
+.pos-action-btn.split-btn:hover {
+    background: linear-gradient(135deg, #6d28d9, #4c1d95);
+}
+
+/* ─── Botón mover ítem (en lista ya en cocina del ordering panel) ─── */
+.item-move-btn {
+    background: rgba(139,92,246,0.15);
+    border: 1px solid rgba(139,92,246,0.3);
+    color: #8b5cf6;
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    margin-left: 4px;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.item-move-btn:hover {
+    background: rgba(139,92,246,0.25);
+    transform: scale(1.05);
+}
+
+/* ─── Move item modal options ─── */
+.split-move-option {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 12px 16px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    transition: all 0.15s ease;
+    text-align: left;
+}
+
+.split-move-option:hover {
+    background: rgba(139,92,246,0.1);
+    border-color: rgba(139,92,246,0.3);
+}
+
+/* ─── Breadcrumb splits button ─── */
+.pos-breadcrumb-splits {
+    background: rgba(139,92,246,0.12);
+    border: 1px solid rgba(139,92,246,0.3);
+    color: #8b5cf6;
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    margin-left: auto;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.pos-breadcrumb-splits:hover {
+    background: rgba(139,92,246,0.2);
+}
+
+/* ─── Responsive Split Chooser ─── */
+
+/*
+  El grid con auto-fit minmax(270px, 1fr) ya se adapta solo:
+    ≥ 810px  → 3 col  (810 / 270 = 3)
+    540-810px → 2 col  (540 / 270 = 2)
+    < 540px  → 1 col
+
+  Solo necesitamos ajustar padding, alturas y botones táctiles.
+*/
+
+/* Pantallas medianas: padding más compacto y lista de ítems acotada */
+@media (max-width: 900px) {
+    .split-list {
+        padding: var(--space-sm) var(--space-md);
+        gap: var(--space-sm);
+    }
+
+    .split-card-items-list {
+        max-height: 240px;
+    }
+}
+
+/* Móvil puro (<540px): 1 columna, acciones apiladas */
+@media (max-width: 540px) {
+    .split-list {
+        /* Forzar 1 columna en pantallas muy pequeñas */
+        grid-template-columns: 1fr;
+        padding: var(--space-sm);
+    }
+
+    .split-card-items-list {
+        max-height: 200px;
+    }
+
+    /* Encabezado más compacto */
+    .split-chooser-header {
+        flex-direction: column;
+        align-items: flex-start;
+        padding: var(--space-sm) var(--space-md);
+        gap: 4px;
+    }
+
+    .split-chooser-total {
+        align-self: flex-end;
+    }
+
+    .split-card-header {
+        padding: 10px var(--space-md);
+    }
+
+    .sc-item-row {
+        padding: 7px var(--space-md);
+    }
+
+    /* Footer apilado verticalmente */
+    .split-card-footer {
+        flex-direction: column;
+        align-items: stretch;
+        padding: 8px var(--space-md);
+        gap: 6px;
+    }
+
+    .sc-btn-add {
+        width: 100%;
+        min-height: 44px;
+        text-align: center;
+    }
+
+    .sc-pay-group {
+        margin-left: 0;
+        width: 100%;
+    }
+
+    .sc-pay-btn {
+        flex: 1;
+        min-height: 44px;
+        padding: 10px 6px;
+        font-size: 0.8rem;
+    }
+
+    .sc-item-move-btn {
+        min-height: 36px;
+        font-size: 0.76rem;
+    }
+
+    .split-chooser-footer {
+        padding: var(--space-sm) var(--space-md);
+    }
+
+    .split-chooser-footer .btn {
+        width: 100%;
+        padding: 14px;
+        font-size: 1rem;
+    }
+}
+
+/* Ajustes táctiles generales para tablet */
+@media (max-width: 768px) {
+    .pos-breadcrumb-splits {
+        font-size: 0.72rem;
+        padding: 3px 8px;
+    }
+
+    .item-move-btn {
+        padding: 4px 10px;
+        font-size: 0.85rem;
+        min-height: 32px;
+    }
+
+    .split-move-option {
+        padding: 14px 16px;
+        font-size: 1rem;
+        min-height: 52px;
+    }
+
+    #split-name-modal .modal-content,
+    #move-item-modal .modal-content {
+        max-width: 95vw;
+        border-radius: 16px;
+    }
+
+    #split-name-modal .form-input {
+        font-size: 1rem;
+        padding: 14px;
     }
 }

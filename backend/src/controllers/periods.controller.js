@@ -32,8 +32,8 @@ class PeriodsController {
                 SELECT
                     COUNT(*) FILTER (WHERE status = 'completed') as total_orders,
                     COALESCE(SUM(total) FILTER (WHERE status = 'completed'), 0) as total_sales,
-                    COALESCE(SUM(total) FILTER (WHERE status = 'completed' AND payment_method = 'cash'), 0) as cash_total,
-                    COALESCE(SUM(total) FILTER (WHERE status = 'completed' AND payment_method = 'transfer'), 0) as transfer_total,
+                    COALESCE(SUM(cash_amount) FILTER (WHERE status = 'completed'), 0) as cash_total,
+                    COALESCE(SUM(transfer_amount) FILTER (WHERE status = 'completed'), 0) as transfer_total,
                     COALESCE(SUM(total) FILTER (WHERE status = 'voided'), 0) as voided_total,
                     COUNT(*) FILTER (WHERE status = 'voided') as voided_count,
                     COUNT(*) FILTER (WHERE status = 'pending') as pending_count
@@ -132,8 +132,8 @@ class PeriodsController {
                 SELECT
                     COUNT(*) FILTER (WHERE status = 'completed') as total_orders,
                     COALESCE(SUM(total) FILTER (WHERE status = 'completed'), 0) as total_sales,
-                    COALESCE(SUM(total) FILTER (WHERE status = 'completed' AND payment_method = 'cash'), 0) as cash_total,
-                    COALESCE(SUM(total) FILTER (WHERE status = 'completed' AND payment_method = 'transfer'), 0) as transfer_total,
+                    COALESCE(SUM(cash_amount) FILTER (WHERE status = 'completed'), 0) as cash_total,
+                    COALESCE(SUM(transfer_amount) FILTER (WHERE status = 'completed'), 0) as transfer_total,
                     COALESCE(SUM(total) FILTER (WHERE status = 'voided'), 0) as voided_total
                 FROM sales
                 WHERE period_id = $1

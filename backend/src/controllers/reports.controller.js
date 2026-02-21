@@ -52,6 +52,7 @@ const ReportsController = {
             const result = await query(`
                 SELECT s.id, s.sale_number, s.status, s.payment_method, s.order_type,
                        s.subtotal, s.tax_total, s.total, s.amount_received, s.change_amount,
+                       s.cash_amount, s.transfer_amount,
                        s.customer_name, s.notes, s.period_id, s.voided_at, s.void_reason,
                        s.created_at,
                        u.username as cashier,
@@ -73,8 +74,8 @@ const ReportsController = {
                     COUNT(*) FILTER (WHERE s.status='completed') as completed_count,
                     COUNT(*) FILTER (WHERE s.status='voided') as voided_count,
                     COALESCE(SUM(s.total) FILTER (WHERE s.status='completed'), 0) as total_revenue,
-                    COALESCE(SUM(s.total) FILTER (WHERE s.payment_method='cash' AND s.status='completed'), 0) as cash_total,
-                    COALESCE(SUM(s.total) FILTER (WHERE s.payment_method='transfer' AND s.status='completed'), 0) as transfer_total,
+                    COALESCE(SUM(s.cash_amount) FILTER (WHERE s.status='completed'), 0) as cash_total,
+                    COALESCE(SUM(s.transfer_amount) FILTER (WHERE s.status='completed'), 0) as transfer_total,
                     COALESCE(AVG(s.total) FILTER (WHERE s.status='completed'), 0) as avg_ticket,
                     COALESCE(MAX(s.total) FILTER (WHERE s.status='completed'), 0) as max_ticket,
                     COALESCE(MIN(s.total) FILTER (WHERE s.status='completed'), 0) as min_ticket
@@ -547,11 +548,11 @@ const ReportsController = {
             const df = getDateFilter(period);
             const dfPayroll = getDateFilterCol(period, 'payment_date');
 
-            // Ingresos por método
+            // Ingresos por método (usando columnas cash_amount/transfer_amount para soportar pago mixto)
             const salesRes = await query(`
-                SELECT 
-                    COALESCE(SUM(CASE WHEN payment_method='cash' THEN total ELSE 0 END), 0) as cash_in,
-                    COALESCE(SUM(CASE WHEN payment_method='transfer' THEN total ELSE 0 END), 0) as transfer_in
+                SELECT
+                    COALESCE(SUM(cash_amount), 0) as cash_in,
+                    COALESCE(SUM(transfer_amount), 0) as transfer_in
                 FROM sales WHERE status='completed' AND ${df}
             `);
 
@@ -964,11 +965,20 @@ const ReportsController = {
             const { period = 'month' } = req.query;
             const df = getDateFilter(period);
             const result = await query(`
-                SELECT payment_method, COUNT(*) as count, COALESCE(SUM(total), 0) as total
+                SELECT payment_method,
+                       COUNT(*) as count,
+                       COALESCE(SUM(total), 0) as total,
+                       COALESCE(SUM(cash_amount), 0) as cash_portion,
+                       COALESCE(SUM(transfer_amount), 0) as transfer_portion
                 FROM sales WHERE status = 'completed' AND ${df}
                 GROUP BY payment_method
             `);
-            return success(res, result.rows);
+            const rows = result.rows;
+            const monetaryTotal = {
+                cash: rows.reduce((s, r) => s + parseFloat(r.cash_portion), 0),
+                transfer: rows.reduce((s, r) => s + parseFloat(r.transfer_portion), 0),
+            };
+            return success(res, { breakdown: rows, monetaryTotal });
         } catch (err) {
             next(err);
         }

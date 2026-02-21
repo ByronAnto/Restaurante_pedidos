@@ -350,6 +350,16 @@ const autoBootstrap = async () => {
             await client.query(`ALTER TABLE sales DROP CONSTRAINT IF EXISTS sales_status_check`);
             await client.query(`ALTER TABLE sales ADD CONSTRAINT sales_status_check CHECK (status IN ('pending','completed','cancelled','voided'))`);
 
+            // Migración: Soporte de Pago Mixto (Efectivo + Transferencia)
+            await client.query(`ALTER TABLE sales DROP CONSTRAINT IF EXISTS sales_payment_method_check`);
+            await client.query(`ALTER TABLE sales ADD CONSTRAINT sales_payment_method_check CHECK (payment_method IN ('cash','transfer','mixed'))`);
+            await client.query(`ALTER TABLE sales ADD COLUMN IF NOT EXISTS cash_amount DECIMAL(12,2) NOT NULL DEFAULT 0`);
+            await client.query(`ALTER TABLE sales ADD COLUMN IF NOT EXISTS transfer_amount DECIMAL(12,2) NOT NULL DEFAULT 0`);
+            await client.query(`UPDATE sales SET cash_amount = total WHERE payment_method = 'cash' AND cash_amount = 0 AND status != 'pending'`);
+            await client.query(`UPDATE sales SET transfer_amount = total WHERE payment_method = 'transfer' AND transfer_amount = 0 AND status != 'pending'`);
+
+            // Migración: División de mesas (table splitting)
+            await client.query(`ALTER TABLE sales ADD COLUMN IF NOT EXISTS split_name VARCHAR(50)`);
 
             // Seed si la DB está vacía
             const { rows } = await client.query('SELECT COUNT(*) FROM users');
@@ -409,6 +419,7 @@ const autoBootstrap = async () => {
                     ('pos_mode','full_service','pos','Modo POS: fast_food, full_service, hybrid'),
                     ('period_start_hour','06','pos','Hora inicio del período de ventas (0-23)'),
                     ('period_end_hour','22','pos','Hora fin del período de ventas (0-23)')
+                    ON CONFLICT (key) DO NOTHING
                 `);
 
                 logger.success('📦 Datos iniciales insertados (admin/admin123, cajero/cajero123)');

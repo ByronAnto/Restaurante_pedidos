@@ -255,7 +255,7 @@ const Reports = {
               ${txns.map(tx => {
                 const isVoided = tx.status === 'voided';
                 const typeLabel = { dine_in: '🏠 Mesa', takeaway: '📦 Llevar' }[tx.order_type] || tx.order_type;
-                const payLabel = { cash: '💵', transfer: '📱' }[tx.payment_method] || tx.payment_method;
+                const payLabel = { cash: '💵 Efectivo', transfer: '📱 Transfer.', mixed: '💳 Mixto' }[tx.payment_method] || tx.payment_method;
                 return `<tr style="${isVoided ? 'opacity:0.5;text-decoration:line-through' : ''}">
                   <td class="fw-bold">${tx.sale_number}</td>
                   <td style="font-size:0.8rem">${new Date(tx.created_at).toLocaleString('es-EC', {day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</td>

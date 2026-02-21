@@ -4,7 +4,9 @@ const { success, error } = require('../utils/responses');
 class PosController {
     async createSale(req, res, next) {
         try {
-            let { items, paymentMethod, amountReceived, transferRef, customerName, customerIdNumber, notes, orderType, tableId } = req.body;
+            let { items, paymentMethod, amountReceived, transferRef,
+                  cashAmount, transferAmount,
+                  customerName, customerIdNumber, notes, orderType, tableId } = req.body;
 
             // Fix: For dine_in (pending orders), paymentMethod might be missing. Default to 'cash' temporarily.
             if (orderType === 'dine_in' && !paymentMethod) {
@@ -15,8 +17,16 @@ class PosController {
                 return error(res, 'Debe incluir al menos un producto', 400);
             }
 
-            if (!paymentMethod || !['cash', 'transfer'].includes(paymentMethod)) {
-                return error(res, 'Método de pago inválido (cash o transfer)', 400);
+            if (!paymentMethod || !['cash', 'transfer', 'mixed'].includes(paymentMethod)) {
+                return error(res, 'Método de pago inválido (cash, transfer o mixed)', 400);
+            }
+
+            if (paymentMethod === 'mixed') {
+                const ca = parseFloat(cashAmount) || 0;
+                const ta = parseFloat(transferAmount) || 0;
+                if (ca <= 0 || ta <= 0) {
+                    return error(res, 'Para pago mixto, ingrese montos válidos para efectivo y transferencia', 400);
+                }
             }
 
             // Validar items
@@ -32,6 +42,8 @@ class PosController {
                 paymentMethod,
                 amountReceived: parseFloat(amountReceived) || 0,
                 transferRef,
+                cashAmount: parseFloat(cashAmount) || 0,
+                transferAmount: parseFloat(transferAmount) || 0,
                 customerName,
                 customerIdNumber,
                 notes,
@@ -154,6 +166,61 @@ class PosController {
         }
     }
 
+    // ─── DIVISIÓN DE MESAS ────────────────────────────────
+
+    async getTableSplits(req, res, next) {
+        try {
+            const splits = await posService.getTableSplits(parseInt(req.params.tableId));
+            return success(res, splits);
+        } catch (err) {
+            next(err);
+        }
+    }
+
+    async createSplit(req, res, next) {
+        try {
+            const { splitName } = req.body;
+            if (!splitName?.trim()) {
+                return error(res, 'Nombre de la cuenta es requerido', 400);
+            }
+            const result = await posService.createSplit(parseInt(req.params.tableId), {
+                splitName: splitName.trim(),
+                userId: req.user.id,
+            });
+            return success(res, result, `Cuenta "${splitName.trim()}" creada`, 201);
+        } catch (err) {
+            if (err.statusCode) return error(res, err.message, err.statusCode);
+            next(err);
+        }
+    }
+
+    async moveSplitItem(req, res, next) {
+        try {
+            const { targetSaleId } = req.body;
+            if (!targetSaleId) {
+                return error(res, 'Cuenta destino (targetSaleId) es requerida', 400);
+            }
+            const result = await posService.moveSplitItem(
+                parseInt(req.params.itemId),
+                parseInt(targetSaleId)
+            );
+            return success(res, result, 'Ítem movido exitosamente');
+        } catch (err) {
+            if (err.statusCode) return error(res, err.message, err.statusCode);
+            next(err);
+        }
+    }
+
+    async deleteSplit(req, res, next) {
+        try {
+            const result = await posService.deleteSplit(parseInt(req.params.id));
+            return success(res, result, 'Sub-cuenta eliminada');
+        } catch (err) {
+            if (err.statusCode) return error(res, err.message, err.statusCode);
+            next(err);
+        }
+    }
+
     async getDailySummary(req, res, next) {
         try {
             const summary = await posService.getDailySummary(req.query.date);
@@ -219,16 +286,28 @@ class PosController {
      */
     async closeOrder(req, res, next) {
         try {
-            const { paymentMethod, amountReceived, transferRef, customerName, customerIdNumber } = req.body;
+            const { paymentMethod, amountReceived, transferRef,
+                    cashAmount, transferAmount,
+                    customerName, customerIdNumber } = req.body;
 
-            if (!paymentMethod || !['cash', 'transfer'].includes(paymentMethod)) {
-                return error(res, 'Método de pago inválido (cash o transfer)', 400);
+            if (!paymentMethod || !['cash', 'transfer', 'mixed'].includes(paymentMethod)) {
+                return error(res, 'Método de pago inválido (cash, transfer o mixed)', 400);
+            }
+
+            if (paymentMethod === 'mixed') {
+                const ca = parseFloat(cashAmount) || 0;
+                const ta = parseFloat(transferAmount) || 0;
+                if (ca <= 0 || ta <= 0) {
+                    return error(res, 'Para pago mixto, ingrese montos válidos para efectivo y transferencia', 400);
+                }
             }
 
             const result = await posService.closeOrder(req.params.id, {
                 paymentMethod,
                 amountReceived: parseFloat(amountReceived) || 0,
                 transferRef,
+                cashAmount: parseFloat(cashAmount) || 0,
+                transferAmount: parseFloat(transferAmount) || 0,
                 customerName,
                 customerIdNumber,
             });
