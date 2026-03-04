@@ -5,24 +5,14 @@ on:
     branches:
       - main
 
-env:
-  DEPLOY_PATH: /home/proyectos/Restaurante_pedidos
-
 jobs:
   deploy:
     name: 🏗️ Build & Deploy
     runs-on: self-hosted
-    defaults:
-      run:
-        working-directory: /home/proyectos/Restaurante_pedidos
 
     steps:
-      - name: 📥 Sincronizar código en servidor
-        run: |
-          cd ${{ env.DEPLOY_PATH }}
-          git fetch origin
-          git reset --hard origin/${{ github.ref_name }}
-          echo "✅ Código actualizado a $(git log --oneline -1)"
+      - name: 📥 Checkout código
+        uses: actions/checkout@v4
 
       - name: 🛑 Detener contenedores anteriores
         run: docker compose down --remove-orphans || true
@@ -56,4 +46,3 @@ jobs:
 
       - name: 🧹 Limpiar imágenes sin uso
         run: docker image prune -f || true
-
