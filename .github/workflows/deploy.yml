@@ -15,7 +15,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: 🛑 Detener contenedores anteriores
-        run: docker compose down --remove-orphans || true
+        run: sudo docker compose down --remove-orphans || true
 
       - name: 🏗️ Construir y levantar contenedores
         run: sudo docker compose up -d --build --force-recreate
@@ -24,7 +24,7 @@ jobs:
         run: |
           echo "Esperando a PostgreSQL..."
           for i in $(seq 1 30); do
-            if docker exec restaurante-db pg_isready -U postgres > /dev/null 2>&1; then
+            if sudo docker exec restaurante-db pg_isready -U postgres > /dev/null 2>&1; then
               echo "✅ PostgreSQL está listo"
               break
             fi
@@ -35,15 +35,16 @@ jobs:
       - name: ✅ Verificar servicios
         run: |
           echo "=== Estado de contenedores ==="
-          docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+          sudo docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
           echo ""
           echo "=== Health Check API ==="
           sleep 3
           curl -sf http://localhost:3000/api/auth/me || echo "⚠️ API aún iniciando (normal en primer deploy)"
           echo ""
           echo "=== Logs del backend ==="
-          docker logs restaurante-api --tail 10
+          sudo docker logs restaurante-api --tail 10
 
       - name: 🧹 Limpiar imágenes sin uso
-        run: docker image prune -f || true
+        run: sudo docker image prune -f || true
+
 
