@@ -18,7 +18,7 @@ jobs:
         run: docker compose down --remove-orphans || true
 
       - name: 🏗️ Construir y levantar contenedores
-        run: docker compose up -d --build --force-recreate
+        run: sudo docker compose up -d --build --force-recreate
 
       - name: ⏳ Esperar que la DB esté lista
         run: |
@@ -46,3 +46,4 @@ jobs:
 
       - name: 🧹 Limpiar imágenes sin uso
         run: docker image prune -f || true
+
